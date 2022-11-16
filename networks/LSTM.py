@@ -12,6 +12,7 @@ from tensorflow.python.keras.layers import InputLayer, LSTM, Input
 import tensorflow as tf
 import time
 import random
+from typing import List
 
 
 # class exp_replay():
@@ -45,30 +46,44 @@ import random
 
 
 class exp_replay():
-    def __init__(self, observation_space, buffer_size=1000000):
+    def __init__(self, observation_space, buffer_size=10):
         self.buffer_size = buffer_size
         self.episode_mem = {}
         self.observation_space = observation_space
+        self.pointer = 0
+
+    # def init_episode(self, episode_num: int):
+    #     state_mem = np.zeros((self.buffer_size, *(self.observation_space.shape)), dtype=np.float32)
+    #     action_mem = np.zeros((self.buffer_size), dtype=np.int32)
+    #     reward_mem = np.zeros((self.buffer_size), dtype=np.float32)
+    #     next_state_mem = np.zeros((self.buffer_size, *(self.observation_space.shape)), dtype=np.float32)
+    #     done_mem = np.zeros((self.buffer_size), dtype=np.bool)
+    #     pointer = 0
+    #     self.episode_mem[episode_num] = (state_mem, action_mem, reward_mem, next_state_mem, done_mem, pointer)
 
     def init_episode(self, episode_num: int):
-        state_mem = np.zeros((self.buffer_size, *(self.observation_space.shape)), dtype=np.float32)
-        action_mem = np.zeros((self.buffer_size), dtype=np.int32)
-        reward_mem = np.zeros((self.buffer_size), dtype=np.float32)
-        next_state_mem = np.zeros((self.buffer_size, *(self.observation_space.shape)), dtype=np.float32)
-        done_mem = np.zeros((self.buffer_size), dtype=np.bool)
+        state_mem = []
+        action_mem = []
+        reward_mem = []
+        next_state_mem = []
+        done_mem = []
         pointer = 0
         self.episode_mem[episode_num] = (state_mem, action_mem, reward_mem, next_state_mem, done_mem, pointer)
 
-    def add_exp(self, state, action, reward, next_state, done, episode_num):
-        if episode_num not in self.episode_mem:
-            self.init_episode(episode_num)
+    def add_exp(self, state: List, action: List, reward: List, next_state: List, done: List):
+        self.episode_mem[self.pointer] = (state, action, reward, next_state, done)
+
+        episode_num = episode_num % self.buffer_size
+        # reset next episode
+        self.init_episode((episode_num + 1) % self.buffer_size)
+
         state_mem, action_mem, reward_mem, next_state_mem, done_mem, pointer = self.episode_mem[episode_num]
-        idx = pointer % self.buffer_size
-        state_mem[idx] = state
-        action_mem[idx] = action
-        reward_mem[idx] = reward
-        next_state_mem[idx] = next_state
-        done_mem[idx] = done
+        # idx = pointer % self.buffer_size
+        state_mem.append(state)
+        action_mem.append(action)
+        reward_mem.append(reward)
+        next_state_mem.append(next_state)
+        done_mem.append(done)
         pointer += 1
         self.episode_mem[episode_num] = (state_mem, action_mem, reward_mem, next_state_mem, done_mem, pointer)
 
@@ -103,11 +118,11 @@ class exp_replay():
 
     def get_info(self, batch, episode_num: int):
         state_mem, action_mem, reward_mem, next_state_mem, done_mem, pointer = self.episode_mem[episode_num]
-        states = state_mem[batch]
-        actions = action_mem[batch]
-        rewards = reward_mem[batch]
-        next_states = next_state_mem[batch]
-        dones = done_mem[batch]
+        states = np.array(state_mem)[batch]
+        actions = np.array(action_mem)[batch]
+        rewards = np.array(reward_mem)[batch]
+        next_states = np.array(next_state_mem)[batch]
+        dones = np.array(done_mem)[batch]
         return states, actions, rewards, next_states, dones
 
 
@@ -117,7 +132,7 @@ class LSTMBasedNet(tensorflow.keras.Model):
     LSTM_1_UNITS = 128
     LSTM_2_UNITS = 128
 
-    def __init__(self, action_space_size, batch_size=1):
+    def __init__(self, action_space_size, batch_size=1, use_lstm_states=True):
         super(LSTMBasedNet, self).__init__()
         self.lstm1 = LSTM(self.LSTM_1_UNITS, activation="tanh", return_sequences=True, return_state=True, name="first_LSTM")
         self.lstm2 = LSTM(self.LSTM_2_UNITS, activation="tanh", return_sequences=True, return_state=True, name="second_LSTM")
@@ -127,6 +142,7 @@ class LSTMBasedNet(tensorflow.keras.Model):
         # self.a = Dense(action_space_size, activation=None, name="advantage_dense")
         self.action_space_size = action_space_size
         self.batch_size = batch_size
+        self.use_lstm_states = use_lstm_states
         self.state_1 = None
         self.state_2 = None
         self.state_v = None
@@ -138,7 +154,8 @@ class LSTMBasedNet(tensorflow.keras.Model):
         self.a_old = tf.keras.layers.Dense(action_space_size, activation=None)
 
     def call(self, inputs, training=None, mask=None):
-        self.reset_lstm_states()
+        if not self.use_lstm_states:
+            self.reset_lstm_states()
         x, state_h_1, state_c_1 = self.lstm1(inputs, initial_state=self.state_1)
         x, state_h_2, state_c_2 = self.lstm2(x, initial_state=self.state_2)
         v, state_h_v, state_c_v = self.v(x, initial_state=self.state_v)
@@ -162,7 +179,8 @@ class LSTMBasedNet(tensorflow.keras.Model):
     #     return Q
 
     def advantage(self, state):
-        self.reset_lstm_states()
+        if not self.use_lstm_states:
+            self.reset_lstm_states()
         x, state_h_1, state_c_1 = self.lstm1(state, initial_state=self.state_1)
         x, state_h_2, state_c_2 = self.lstm2(x, initial_state=self.state_2)
         a, state_h_a, state_c_a = self.a(x, initial_state=self.state_a)
@@ -173,7 +191,8 @@ class LSTMBasedNet(tensorflow.keras.Model):
         return a
 
     def value_advantage(self, state):
-        self.reset_lstm_states()
+        if not self.use_lstm_states:
+            self.reset_lstm_states()
         x, state_h_1, state_c_1 = self.lstm1(state, initial_state=self.state_1)
         x, state_h_2, state_c_2 = self.lstm2(x, initial_state=self.state_2)
         v, state_h_v, state_c_v = self.v(x, initial_state=self.state_v)
@@ -207,7 +226,7 @@ class LSTMAgent:
     def __init__(self, state_size, action_size, observation_space, replace=50):
         self.state_size = state_size
         self.action_size = action_size
-        self.seq_length = 2
+        self.seq_length = 64
         self.memory = exp_replay(observation_space)
         self.gamma = 0.95  # discount rate
         self.epsilon = 1.0  # exploration rate
@@ -220,6 +239,7 @@ class LSTMAgent:
         self.net_chckpoint = None
         self.history = {}
         self.history["loss"] = []
+        self.debug = True
 
     def _build_model(self, action_size):
         # Neural Net for Deep-Q learning Model
@@ -229,9 +249,11 @@ class LSTMAgent:
         # note: try using Huber loss instad
         self.q_net.compile(loss='mse', optimizer=opt, run_eagerly=True)
         self.target_net.compile(loss='mse', optimizer=opt, run_eagerly=True)
+        self.q_net.predict(tf.zeros([1, 1, self.state_size]), verbose=0)
+        self.target_net.predict(tf.zeros([1, 1, self.state_size]), verbose=0)
 
     def memorize(self, state, action, reward, next_state, done, episode_num):
-          self.memory.add_exp(state, action, reward, next_state, done, episode_num)
+        self.memory.add_exp(state, action, reward, next_state, done, episode_num)
 
     def act(self, state, test=False):
         if np.random.rand() <= self.epsilon and not test:
@@ -262,7 +284,9 @@ class LSTMAgent:
             return
         states, actions, rewards, next_states, dones = batch_act
         states = tf.expand_dims(states, axis=0)
+        next_states = tf.expand_dims(next_states, axis=0)
         _ = self.q_net.predict(states, verbose=0)
+        _ = self.target_net.predict(next_states, verbose=0)
 
         states, actions, rewards, next_states, dones = batch_train
 
@@ -277,16 +301,25 @@ class LSTMAgent:
         q_target[0, batch_index, actions] = rewards + self.gamma * next_state_val[batch_index, seq_index, max_action] * np.logical_not(dones)
         # q_target[batch_index, actions] = rewards + self.gamma * next_state_val[batch_index, max_action] * np.logical_not(dones)
 
-        print(f"expected: {q_target}")
-        print(f"predicted: {self.q_net.predict(states, verbose=0)}")
-        value_prev, adv_prev = self.q_net.value_advantage(states)
+        value_prev, adv_prev = None, None
+        if self.debug:
+            lstm_states = self.q_net.get_lstm_states()
+            print(f"expected: {q_target}")
+            print(f"predicted: {self.q_net.predict(states, verbose=0)}")
+            self.q_net.set_lstm_states(lstm_states)
+            value_prev, adv_prev = self.q_net.value_advantage(states)
+            self.q_net.set_lstm_states(lstm_states)
         history = self.q_net.fit(states, q_target, epochs=1, verbose=0)
         loss = history.history["loss"]
-        print(f"loss: {loss}")
-        value, adv = self.q_net.value_advantage(states)
-        print(f"value: {value_prev} to {value}")
-        print(f"adv: {adv_prev} to {adv}")
-        print(f"predicted_after: {self.q_net.predict(states, verbose=0)}\n\n")
+        if self.debug:
+            lstm_states = self.q_net.get_lstm_states()
+            print(f"loss: {loss}")
+            value, adv = self.q_net.value_advantage(states)
+            self.q_net.set_lstm_states(lstm_states)
+            print(f"value: {value_prev} to {value}")
+            print(f"adv: {adv_prev} to {adv}")
+            print(f"predicted_after: {self.q_net.predict(states, verbose=0)}\n\n")
+            self.q_net.set_lstm_states(lstm_states)
         self.history["loss"].append(loss)
         # if np.all(dones):
         #     self.q_net.fit(states, q_target, epochs=10, verbose=2)
@@ -381,7 +414,11 @@ def test_lstm():
     state_size = env.observation_space.shape[0]
     action_size = env.action_space.n
     agentoo7 = LSTMAgent(state_size, action_size, env.observation_space)
-    EPISODES = 50
+    try:
+        agentoo7.load("agent_64")
+    except:
+        print("unable to load agent")
+    EPISODES = 20
     for s in range(EPISODES):
         print(f"EPISODE: {s}")
         done = False
@@ -393,9 +430,10 @@ def test_lstm():
             # env.render()
             action = agentoo7.act(state)
             next_state, reward, done, _, _ = env.step(action)
-            next_state = np.reshape(next_state, [1, state_size])
-            # reward = reward if not done else -10
+
+            state = np.reshape(state, [state_size])
             agentoo7.memorize(state, action, reward, next_state, done, s)
+            next_state = np.reshape(next_state, [1, state_size])
             for i in range(10):
                 agentoo7.train()
             # if s > 4:
@@ -405,6 +443,8 @@ def test_lstm():
 
             if done:
                 print(f"total reward after {s} episode is {episode_reward} and epsilon is {agentoo7.epsilon}")
+        agentoo7.save("agent_64")
+
 
     losses = agentoo7.history["loss"]
     plt.plot(np.arange(0, len(losses), 1), losses)
@@ -424,9 +464,6 @@ def test_lstm():
             print(f"action: {action}")
             next_state, reward, done, _, _ = env.step(action)
             next_state = np.reshape(next_state, [1, state_size])
-            # reward = reward if not done else -10
-            # agentoo7.memorize(state, action, reward, next_state, done)
-            # agentoo7.train()
             state = next_state
             episode_reward += reward
             total_reward += reward
