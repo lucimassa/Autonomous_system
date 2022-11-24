@@ -1,7 +1,7 @@
 import gym
 from networks.ddql import test_ddql
 from networks.dddql import test_dddql
-from networks.LSTM import test_lstm, lstm_tutorial
+from networks.LSTM import *
 import tensorflow as tf
 import time
 
@@ -14,7 +14,6 @@ def test_environment():
 
     for i in range(1000):
         observation, reward, terminated, truncated, info = env.step(env.action_space.sample())
-
 
         if terminated or truncated:
             observation, info = env.reset()
@@ -43,7 +42,9 @@ if __name__ == '__main__':
     #     test_dddql()
     # with tf.device(gpus[0].name):
     with tf.device("/cpu:0"):
-        test_lstm()
+        train_actor_learner_agents()
+        # test_actor_learner_agents()
+        # test_lstm()
         # lstm_tutorial()
     print(f"time usd: {time.time() - start}")
     # test_ddql()
