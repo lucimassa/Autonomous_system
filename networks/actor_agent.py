@@ -29,8 +29,11 @@ class ActorAgent:
         # Neural Net for Deep-Q learning Model
         self.agent = LSTMBasedNet(action_space_size=self.action_size, batch_size=1)
         opt = tf.keras.optimizers.Adam()
-        # note: try using Huber loss instad
-        self.agent.compile(loss='mse', optimizer=opt, run_eagerly=True)
+
+        # should not be needed to specify the loss function,
+        #   as this net will never train but just copy another trained network
+        loss_func = tf.keras.losses.Huber()
+        self.agent.compile(loss=loss_func, optimizer=opt, run_eagerly=True)
         self.agent.predict(tf.zeros([1, 1, self.state_size]), verbose=0)
 
     def _act(self, state, test=False):

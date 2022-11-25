@@ -5,7 +5,6 @@ import tensorflow as tf
 from typing import List
 from utils.replay_buffer import ReplayBuffer
 from networks.lstm_based_dddql import LSTMBasedNet
-from tensorflow.python.keras.models import load_model, save_model
 
 
 class LearnerAgent:
@@ -15,7 +14,7 @@ class LearnerAgent:
         self.seq_length = 64
         self.replay_buffer = replay_buffer
         self.gamma = 0.95  # discount rate
-        self.replace = 20
+        self.replace = 100
         self.trainstep = 0
         self.learning_rate = 0.001
         self._build_model(action_size)
@@ -29,11 +28,13 @@ class LearnerAgent:
         self.q_net = LSTMBasedNet(action_size)
         self.target_net = LSTMBasedNet(action_size)
         opt = tf.keras.optimizers.Adam(learning_rate=self.learning_rate)
+        loss_func = tf.keras.losses.Huber()
         # note: try using Huber loss instad
-        self.q_net.compile(loss='mse', optimizer=opt, run_eagerly=True)
-        self.target_net.compile(loss='mse', optimizer=opt, run_eagerly=True)
+        self.q_net.compile(loss=loss_func, optimizer=opt, run_eagerly=True)
+        self.target_net.compile(loss=loss_func, optimizer=opt, run_eagerly=True)
         self.q_net.predict(tf.zeros([1, 1, self.state_size]), verbose=0)
         self.target_net.predict(tf.zeros([1, 1, self.state_size]), verbose=0)
+        self.q_net.summary()
 
     def update_target(self):
         self.target_net.set_weights(self.q_net.get_weights())
