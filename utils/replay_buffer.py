@@ -39,7 +39,7 @@ class ReplayBuffer:
                                           np.array(done))
         self.pointer = (self.pointer + 1) % self.buffer_size
 
-    def sample_exp(self):
+    def sample_exp(self, gamma, n_step):
         loss_key_list = [(self.episode_mem[key][0], key) for key in list(self.episode_mem.keys())]
         if len(loss_key_list) == 0:
             return None, None, None
@@ -47,6 +47,13 @@ class ReplayBuffer:
         key = random.choices(key_list, weights=loss_list)[0]
         # episode_num = 0
         loss, state, action, reward, next_state, done = self.episode_mem[key]
+        # n_step_reward = np.zeros(reward.shape)
+        # for i in range(n_step):
+        #     to_add = np.zeros(reward.shape)
+        #     to_add[:-i] = reward[i:]
+        #     n_step_reward = n_step_reward + to_add
+
+
         middle = round(len(state) / 2)
         act_batch = state[:middle], action[:middle], reward[:middle], next_state[:middle], done[:middle]
         train_batch = state[middle:], action[middle:], reward[middle:], next_state[middle:], done[middle:]
