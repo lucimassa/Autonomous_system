@@ -13,8 +13,8 @@ class LearnerAgent:
         self.action_size = action_size
         self.seq_length = 64
         self.replay_buffer = replay_buffer
-        self.gamma = 0.95  # discount rate
-        self.replace = 50
+        self.gamma = 0.995  # discount rate
+        self.replace = 20
         self.trainstep = 0
         self.learning_rate = 0.001
         self._build_model(action_size)
@@ -29,7 +29,8 @@ class LearnerAgent:
         self.q_net = LSTMBasedNet(action_size)
         self.target_net = LSTMBasedNet(action_size)
         opt = tf.keras.optimizers.Adam(learning_rate=self.learning_rate)
-        loss_func = tf.keras.losses.Huber()
+        # loss_func = tf.keras.losses.mse
+        loss_func = tf.keras.losses.Huber(delta=5)
         # note: try using Huber loss instad
         self.q_net.compile(loss=loss_func, optimizer=opt, run_eagerly=True)
         self.target_net.compile(loss=loss_func, optimizer=opt, run_eagerly=True)
@@ -40,17 +41,17 @@ class LearnerAgent:
     def update_target(self):
         self.target_net.set_weights(self.q_net.get_weights())
 
-    def train(self, times):
+    def train(self, epochs):
 
-        for t in range(times):
-            if self.trainstep % self.replace == 0:
-                self.update_target()
-
-            self.save_net_states()
+        self.trainstep += 1
+        if self.trainstep % self.replace == 0:
+            self.update_target()
+        batch = []
+        for batch_act, batch_train, episode_key in self.replay_buffer.sample_exp():
 
             # first run the RNN to update the state of the net (without training the weights)
             self.reset_net_states()
-            batch_act, batch_train, episode_key = self.replay_buffer.sample_exp(self.gamma, self.n_step)
+            print(f"episode_key: {episode_key}")
             if batch_act is None or batch_train is None:
                 print("Not enouth data to train.")
                 return
@@ -61,55 +62,98 @@ class LearnerAgent:
             _ = self.target_net.predict(next_states, verbose=0)
 
             states, actions, rewards, next_states, dones = batch_train
+            n_step_states = states
+            n_step_actions = actions
+            n_step_rewards = self.get_n_step_reward(rewards)
+            n_step_next_states = np.zeros(next_states.shape)
+            n_step_next_states[:-(self.n_step - 1)] = n_step_next_states[(self.n_step - 1):]
+            n_step_dones = np.full(dones.shape, True)
+            n_step_dones[:-(self.n_step - 1)] = dones[(self.n_step - 1):]
+            if not dones[-1]:
+                n_step_states = n_step_states[:-(self.n_step - 1)]
+                n_step_actions = n_step_actions[:-(self.n_step - 1)]
+                n_step_rewards = n_step_rewards[:-(self.n_step - 1)]
+                n_step_next_states = n_step_next_states[:-(self.n_step - 1)]
+                n_step_dones = n_step_dones[:-(self.n_step - 1)]
 
-            states = tf.expand_dims(states, axis=0)             # add batch size as 1
-            next_states = tf.expand_dims(next_states, axis=0)
-            target = self.predict_q_net(states)
-            next_state_val = self.predict_target_net(next_states)
-            max_action = np.argmax(self.predict_q_net(next_states), axis=-1)
-            batch_index = np.arange(states.shape[0], dtype=np.int32)
-            seq_index = np.arange(states.shape[1], dtype=np.int32)
+            n_step_states = tf.expand_dims(n_step_states, axis=0)             # add batch size as 1
+            n_step_next_states = tf.expand_dims(n_step_next_states, axis=0)
+            target = self.predict_q_net(n_step_states)
+            next_state_val = self.predict_target_net(n_step_next_states)
+            max_action = np.argmax(self.predict_q_net(n_step_next_states), axis=-1)
+            batch_index = np.arange(n_step_states.shape[0], dtype=np.int32)
+            seq_index = np.arange(n_step_states.shape[1], dtype=np.int32)
             q_target = np.copy(target)  # optional
 
-            q_target[0, seq_index, actions] = rewards + self.gamma * next_state_val[batch_index, seq_index, max_action] * np.logical_not(dones)
+            q_target[0, seq_index, n_step_actions] = n_step_rewards + (self.gamma ** self.n_step) * \
+                                                     next_state_val[batch_index, seq_index, max_action] * \
+                                                     np.logical_not(n_step_dones)
             # q_target[batch_index, actions] = rewards + self.gamma * next_state_val[batch_index, max_action] * np.logical_not(dones)
 
             value_prev, adv_prev = None, None
             if self.debug:
                 print(f"expected: {q_target}")
-                print(f"predicted: {self.predict_q_net(states)}")
+                print(f"predicted: {self.predict_q_net(n_step_states)}")
                 print(f"next_values_qnet: {max_action}")
                 print(f"next_valus_target: {next_state_val}")
                 print(f"episode_key: {episode_key}")
                 print(f"replay buffer priorities:: {[(key, self.replay_buffer.episode_mem[key][0]) for key in self.replay_buffer.episode_mem.keys()]}")
                 q_net_states = self.q_net.get_lstm_states()
-                value_prev, adv_prev = self.q_net.value_advantage(states)
+                value_prev, adv_prev, _ = self.q_net.value_advantage(n_step_states)
                 self.q_net.set_lstm_states(q_net_states)
-            q_net_states = self.q_net.get_lstm_states()
-            history = self.q_net.fit(states, q_target, epochs=1, verbose=0)
-            self.q_net.set_lstm_states(q_net_states)
-            loss = history.history["loss"]
-            assert len(loss) == 1
-            self.replay_buffer.update_loss(episode_key, loss[0])
+
+            batch.append((self.q_net.get_lstm_states(), n_step_states, q_target, episode_key))
+
+            loss = None
+            # loss = self.fit_q_net(n_step_states, q_target, epochs=1)
+            # self.replay_buffer.update_loss(episode_key, loss[0])
+
             if self.debug:
                 print(f"loss: {loss}")
-                value, adv = self.q_net.value_advantage(states)
+                q_net_states = self.q_net.get_lstm_states()
+                value, adv, _ = self.q_net.value_advantage(n_step_states)
                 self.q_net.set_lstm_states(q_net_states)
                 print(f"value: {value_prev} to {value}")
                 print(f"adv: {adv_prev} to {adv}")
-                print(f"predicted_after: {self.predict_q_net(states)}\n\n")
-            self.history["loss"].append(loss)
-            # if np.all(dones):
-            #     self.q_net.fit(states, q_target, epochs=10, verbose=2)
-            self.trainstep += 1
+                print(f"predicted_after: {self.predict_q_net(n_step_states)}\n\n")
 
-            self.restore_net_states()
+        self.fit_q_net_batch(batch, epochs)
+
+
+    def get_n_step_reward(self, reward):
+        n_step_reward = reward
+        for i in range(1, self.n_step, 1):
+            to_add = np.zeros(reward.shape)
+            to_add[:-i] = reward[i:]
+            n_step_reward = n_step_reward + (self.gamma ** i) * to_add
+        return n_step_reward
+
+    def fit_q_net_batch(self, batch, epochs):
+        for ep in range(epochs):
+            for lstm_states, n_step_states, q_target, episode_key in batch:
+                self.q_net.set_lstm_states(lstm_states)
+                loss = self.fit_q_net(n_step_states, q_target, epochs=1)[0]
+                if ep == epochs - 1:
+                    # replace loss with better function
+                    self.replay_buffer.update_loss(episode_key, loss)
+                    self.history["loss"].append(loss)
+
+    def fit_q_net(self, n_step_states, q_target, epochs=1, change_rnn_states=False):
+        history = None
+        for ep in range(epochs):
+            if change_rnn_states:
+                history = self.q_net.fit(n_step_states, q_target, epochs=1, verbose=0)
+            else:
+                q_net_states = self.q_net.get_lstm_states()
+                history = self.q_net.fit(n_step_states, q_target, epochs=1, verbose=0)
+                self.q_net.set_lstm_states(q_net_states)
+        return history.history["loss"]
 
     def predict_q_net(self, states, change_rnn_states=False):
-        return self._predict(self.target_net, states, change_rnn_states)
+        return self._predict(self.q_net, states, change_rnn_states)
 
     def predict_target_net(self, states, change_rnn_states=False):
-        return self._predict(self.q_net, states, change_rnn_states)
+        return self._predict(self.target_net, states, change_rnn_states)
 
     def _predict(self, network: LSTMBasedNet, states, change_rnn_states=False):
         if change_rnn_states:

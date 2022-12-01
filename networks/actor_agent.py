@@ -9,7 +9,7 @@ from networks.lstm_based_dddql import LSTMBasedNet
 
 class ActorAgent:
     SEQ_LEN = 80
-    MIN_LEN = 30
+    MIN_LEN = 20
 
     def __init__(self, env, replay_buffer: ReplayBuffer = None, test=False):
         copy.deepcopy(env)
@@ -33,6 +33,7 @@ class ActorAgent:
         # should not be needed to specify the loss function,
         #   as this net will never train but just copy another trained network
         loss_func = tf.keras.losses.Huber()
+        # loss_func = tf.keras.losses.mse
         self.agent.compile(loss=loss_func, optimizer=opt, run_eagerly=True)
         self.agent.predict(tf.zeros([1, 1, self.state_size]), verbose=0)
 
@@ -44,8 +45,8 @@ class ActorAgent:
         # print(np.argmax(act_values))
         return np.argmax(act_values)  # returns action
 
-    def act(self, episodes=500, test=False):
-        for ep in range(episodes):
+    def act(self, trials=1000, test=False):
+        for ep in range(trials):
             done = False
             state, _ = self.env.reset()
             state = np.reshape(state, [1, self.state_size])

@@ -36,7 +36,7 @@ def train_actor_learner_agents():
     replay_buffer = ReplayBuffer(env.observation_space)
     actor = ActorAgent(env, replay_buffer)
     learner = LearnerAgent(state_size, action_size, replay_buffer)
-    EPISODES = 200
+    EPISODES = 400
     try:
         learner.load("agent_64")
         print("weights loaded")
@@ -49,13 +49,11 @@ def train_actor_learner_agents():
         print(f"EPISODE: {ep}")
         print(f"epsilon: {actor.epsilon}")
         actor.act()
-        learner.train(5)
+        learner.train(epochs=10)
 
         if ep % 5 == 0:
             learner.save("agent_64")
             actor.update(learner.q_net)
-            if ep > 0:
-                print(f"average loss:  {statistics.mean([statistics.mean(e) for e in learner.history['loss']])}")
         actor.update_epsilon()
         if ep % 10 == 0:
             for loss, e1, e2, e3, e4, e5 in replay_buffer.episode_mem.values():
