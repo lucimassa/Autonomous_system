@@ -30,12 +30,13 @@ def lstm_tutorial():
 
 
 def train_actor_learner_agents():
+    N_STEP = 5
     env = gym.make('CartPole-v1')
     state_size = env.observation_space.shape[0]
     action_size = env.action_space.n
-    replay_buffer = ReplayBuffer(env.observation_space)
+    replay_buffer = ReplayBuffer(env.observation_space, n_step=N_STEP)
     actor = ActorAgent(env, replay_buffer)
-    learner = LearnerAgent(state_size, action_size, replay_buffer)
+    learner = LearnerAgent(state_size, action_size, N_STEP, replay_buffer)
     EPISODES = 400
     try:
         learner.load("agent_64")
@@ -68,10 +69,11 @@ def test_actor_learner_agents():
     env = gym.make('CartPole-v1', render_mode="human")
     state_size = env.observation_space.shape[0]
     action_size = env.action_space.n
-    replay_buffer = ReplayBuffer(env.observation_space)
+    replay_buffer = ReplayBuffer(env.observation_space, n_step=5)
     actor = ActorAgent(env, None)
-    learner = LearnerAgent(state_size, action_size, replay_buffer)
+    learner = LearnerAgent(state_size, action_size, 5, replay_buffer)
     EPISODES = 5
+
     try:
         learner.load("agent_64")
         actor.update(learner.q_net)

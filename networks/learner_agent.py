@@ -5,10 +5,11 @@ import tensorflow as tf
 from typing import List
 from utils.replay_buffer import ReplayBuffer
 from networks.lstm_based_dddql import LSTMBasedNet
+from pynverse import inversefunc
 
 
 class LearnerAgent:
-    def __init__(self, state_size, action_size, replay_buffer: ReplayBuffer):
+    def __init__(self, state_size, action_size, n_step, replay_buffer: ReplayBuffer):
         self.state_size = state_size
         self.action_size = action_size
         self.seq_length = 64
@@ -16,21 +17,22 @@ class LearnerAgent:
         self.gamma = 0.995  # discount rate
         self.replace = 20
         self.trainstep = 0
-        self.learning_rate = 0.001
+        self.learning_rate = 0.01
         self._build_model(action_size)
         self.net_chckpoint = None
         self.history = {}
         self.history["loss"] = []
         self.debug = True
-        self.n_step = 5
+        self.n_step = n_step
+        self.epsilon = .001
 
     def _build_model(self, action_size):
         # Neural Net for Deep-Q learning Model
         self.q_net = LSTMBasedNet(action_size)
         self.target_net = LSTMBasedNet(action_size)
         opt = tf.keras.optimizers.Adam(learning_rate=self.learning_rate)
-        # loss_func = tf.keras.losses.mse
-        loss_func = tf.keras.losses.Huber(delta=5)
+        loss_func = tf.keras.losses.mse
+        # loss_func = tf.keras.losses.Huber(delta=5)
         # note: try using Huber loss instad
         self.q_net.compile(loss=loss_func, optimizer=opt, run_eagerly=True)
         self.target_net.compile(loss=loss_func, optimizer=opt, run_eagerly=True)
@@ -58,6 +60,9 @@ class LearnerAgent:
             states, actions, rewards, next_states, dones = batch_act
             states = tf.expand_dims(states, axis=0)
             next_states = tf.expand_dims(next_states, axis=0)
+            _ = self.q_net.predict(next_states, verbose=0)
+            q_net_lstm_states_next = self.q_net.get_lstm_states()
+            self.reset_net_states()
             _ = self.q_net.predict(states, verbose=0)
             _ = self.target_net.predict(next_states, verbose=0)
 
@@ -65,10 +70,8 @@ class LearnerAgent:
             n_step_states = states
             n_step_actions = actions
             n_step_rewards = self.get_n_step_reward(rewards)
-            n_step_next_states = np.zeros(next_states.shape)
-            n_step_next_states[:-(self.n_step - 1)] = n_step_next_states[(self.n_step - 1):]
-            n_step_dones = np.full(dones.shape, True)
-            n_step_dones[:-(self.n_step - 1)] = dones[(self.n_step - 1):]
+            n_step_next_states = next_states
+            n_step_dones = dones
             if not dones[-1]:
                 n_step_states = n_step_states[:-(self.n_step - 1)]
                 n_step_actions = n_step_actions[:-(self.n_step - 1)]
@@ -78,29 +81,34 @@ class LearnerAgent:
 
             n_step_states = tf.expand_dims(n_step_states, axis=0)             # add batch size as 1
             n_step_next_states = tf.expand_dims(n_step_next_states, axis=0)
+
             target = self.predict_q_net(n_step_states)
             next_state_val = self.predict_target_net(n_step_next_states)
-            max_action = np.argmax(self.predict_q_net(n_step_next_states), axis=-1)
+            max_action = np.argmax(self.predict_q_net(n_step_next_states, lstm_states=q_net_lstm_states_next), axis=-1)
             batch_index = np.arange(n_step_states.shape[0], dtype=np.int32)
             seq_index = np.arange(n_step_states.shape[1], dtype=np.int32)
             q_target = np.copy(target)  # optional
 
-            q_target[0, seq_index, n_step_actions] = n_step_rewards + (self.gamma ** self.n_step) * \
-                                                     next_state_val[batch_index, seq_index, max_action] * \
-                                                     np.logical_not(n_step_dones)
+            q_target[0, seq_index, n_step_actions] = self.h(n_step_rewards + (self.gamma ** self.n_step) * \
+                                                     self.h_inverse(next_state_val[batch_index, seq_index, max_action] * \
+                                                     np.logical_not(n_step_dones)))
             # q_target[batch_index, actions] = rewards + self.gamma * next_state_val[batch_index, max_action] * np.logical_not(dones)
 
             value_prev, adv_prev = None, None
             if self.debug:
                 print(f"expected: {q_target}")
                 print(f"predicted: {self.predict_q_net(n_step_states)}")
-                print(f"next_values_qnet: {max_action}")
+                print(f"next_values_qnet: {self.predict_q_net(n_step_next_states, lstm_states=q_net_lstm_states_next)}")
+                print(f"max_action: {max_action}")
+                print(f"n_step_actions: {n_step_actions}")
                 print(f"next_valus_target: {next_state_val}")
                 print(f"episode_key: {episode_key}")
                 print(f"replay buffer priorities:: {[(key, self.replay_buffer.episode_mem[key][0]) for key in self.replay_buffer.episode_mem.keys()]}")
                 q_net_states = self.q_net.get_lstm_states()
                 value_prev, adv_prev, _ = self.q_net.value_advantage(n_step_states)
                 self.q_net.set_lstm_states(q_net_states)
+                print(f"value: {value_prev}")
+                print(f"adv: {adv_prev}")
 
             batch.append((self.q_net.get_lstm_states(), n_step_states, q_target, episode_key))
 
@@ -108,17 +116,13 @@ class LearnerAgent:
             # loss = self.fit_q_net(n_step_states, q_target, epochs=1)
             # self.replay_buffer.update_loss(episode_key, loss[0])
 
-            if self.debug:
-                print(f"loss: {loss}")
-                q_net_states = self.q_net.get_lstm_states()
-                value, adv, _ = self.q_net.value_advantage(n_step_states)
-                self.q_net.set_lstm_states(q_net_states)
-                print(f"value: {value_prev} to {value}")
-                print(f"adv: {adv_prev} to {adv}")
-                print(f"predicted_after: {self.predict_q_net(n_step_states)}\n\n")
-
         self.fit_q_net_batch(batch, epochs)
 
+    def h(self, x: np.ndarray):
+        return np.sign(x) * (np.sqrt(np.absolute(x) + 1) - 1) + self.epsilon * x
+
+    def h_inverse(self, x):
+        return inversefunc(self.h, y_values=x)
 
     def get_n_step_reward(self, reward):
         n_step_reward = reward
@@ -149,19 +153,18 @@ class LearnerAgent:
                 self.q_net.set_lstm_states(q_net_states)
         return history.history["loss"]
 
-    def predict_q_net(self, states, change_rnn_states=False):
-        return self._predict(self.q_net, states, change_rnn_states)
+    def predict_q_net(self, states, lstm_states=None):
+        return self._predict(self.q_net, states, lstm_states)
 
-    def predict_target_net(self, states, change_rnn_states=False):
-        return self._predict(self.target_net, states, change_rnn_states)
+    def predict_target_net(self, states, lstm_states=None):
+        return self._predict(self.target_net, states, lstm_states)
 
-    def _predict(self, network: LSTMBasedNet, states, change_rnn_states=False):
-        if change_rnn_states:
-            return network.predict(states, verbose=0)
-        else:
-            q_net_states = network.get_lstm_states()
-            out = network.predict(states, verbose=0)
-            network.set_lstm_states(q_net_states)
+    def _predict(self, network: LSTMBasedNet, states, lstm_states):
+        q_net_states = network.get_lstm_states()
+        if lstm_states is not None:
+            network.set_lstm_states(lstm_states)
+        out = network.predict(states, verbose=0)
+        network.set_lstm_states(q_net_states)
 
         return out
 

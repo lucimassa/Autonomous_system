@@ -16,11 +16,11 @@ class LSTMBasedNet(tf.keras.Model):
 
     def __init__(self, action_space_size, batch_size=1, use_lstm_states=True):
         super(LSTMBasedNet, self).__init__()
-        self.dense1 = tf.keras.layers.Conv1D(filters=self.DENSE_1_UNITS, kernel_size=1, activation="relu", kernel_regularizer='l2', name="conv1")
-        self.dense2 = tf.keras.layers.Conv1D(filters=self.DENSE_2_UNITS, kernel_size=1, activation="relu", kernel_regularizer='l2', name="conv2")
-        self.lstm1 = tf.keras.layers.LSTM(self.LSTM_1_UNITS, activation="tanh", return_sequences=True, return_state=True, kernel_regularizer='l2', name="first_LSTM")
-        self.lstm2 = tf.keras.layers.LSTM(self.LSTM_2_UNITS, activation="tanh", return_sequences=True, return_state=True, kernel_regularizer='l2', name="second_LSTM")
-        self.dense3 = tf.keras.layers.Conv1D(filters=self.DENSE_3_UNITS, kernel_size=1, activation="relu", kernel_regularizer='l2', name="conv3")
+        self.dense1 = tf.keras.layers.Conv1D(filters=self.DENSE_1_UNITS, kernel_size=1, activation="relu", name="conv1")
+        self.dense2 = tf.keras.layers.Conv1D(filters=self.DENSE_2_UNITS, kernel_size=1, activation="relu", name="conv2")
+        self.lstm1 = tf.keras.layers.LSTM(self.LSTM_1_UNITS, activation="tanh", return_sequences=True, return_state=True, name="first_LSTM")
+        self.lstm2 = tf.keras.layers.LSTM(self.LSTM_2_UNITS, activation="tanh", return_sequences=True, return_state=True, name="second_LSTM")
+        self.dense3 = tf.keras.layers.Conv1D(filters=self.DENSE_3_UNITS, kernel_size=1, activation="relu", name="conv3")
         self.v = tf.keras.layers.Conv1D(filters=1, kernel_size=1, activation=None, kernel_regularizer='l2', name="value_conv")
         self.a = tf.keras.layers.Conv1D(filters=action_space_size, kernel_size=1, activation=None, kernel_regularizer='l2', name="advantage_conv")
         # self.v = tf.keras.layers.LSTM(1, activation=None, return_sequences=True, return_state=True, name="value_LSTM")

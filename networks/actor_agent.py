@@ -9,7 +9,7 @@ from networks.lstm_based_dddql import LSTMBasedNet
 
 class ActorAgent:
     SEQ_LEN = 80
-    MIN_LEN = 20
+    MIN_LEN = 30
 
     def __init__(self, env, replay_buffer: ReplayBuffer = None, test=False):
         copy.deepcopy(env)
@@ -32,13 +32,13 @@ class ActorAgent:
 
         # should not be needed to specify the loss function,
         #   as this net will never train but just copy another trained network
-        loss_func = tf.keras.losses.Huber()
-        # loss_func = tf.keras.losses.mse
+        # loss_func = tf.keras.losses.Huber()
+        loss_func = tf.keras.losses.mse
         self.agent.compile(loss=loss_func, optimizer=opt, run_eagerly=True)
         self.agent.predict(tf.zeros([1, 1, self.state_size]), verbose=0)
 
     def _act(self, state, test=False):
-        if np.random.rand() <= self.epsilon and not test and False:
+        if np.random.rand() <= self.epsilon and not test:
             return random.randrange(self.action_size)
         # state = tf.expand_dims(state, axis=0)
         act_values = self.agent.advantage(np.array([state]))
@@ -92,6 +92,7 @@ class ActorAgent:
                 state = next_state
                 episode_reward += reward
             if saved_something or test:
+                print(f"action_list: {action_list}")
                 print(f"total_trial: {ep}")
                 return total_reward
 

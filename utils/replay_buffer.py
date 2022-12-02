@@ -6,12 +6,13 @@ from typing import List
 
 
 class ReplayBuffer:
-    def __init__(self, observation_space, buffer_size=512, batch_size=32):
+    def __init__(self, observation_space, n_step, buffer_size=512, batch_size=32):
         self.buffer_size = buffer_size
         self.batch_size = batch_size
         self.episode_mem = {}
         self.observation_space = observation_space
         self.pointer = 0
+        self.n_step = n_step
 
     # def init_episode(self, episode_num: int):
     #     state_mem = np.zeros((self.buffer_size, *(self.observation_space.shape)), dtype=np.float32)
@@ -53,12 +54,24 @@ class ReplayBuffer:
         out = []
         for k in key:
             loss, state, action, reward, next_state, done = self.episode_mem[k]
+            state, action, reward, next_state, done = self.n_step_fix(state, action, reward, next_state, done)
 
             middle = round(len(state) / 2)
             act_batch = state[:middle], action[:middle], reward[:middle], next_state[:middle], done[:middle]
             train_batch = state[middle:], action[middle:], reward[middle:], next_state[middle:], done[middle:]
             out.append((act_batch, train_batch, k))
         return out
+
+    def n_step_fix(self, states, actions, rewards, next_states, dones):
+
+        n_step_states = states
+        n_step_actions = actions
+        n_step_rewards = rewards
+        n_step_next_states = np.zeros(next_states.shape)
+        n_step_next_states[:-(self.n_step - 1)] = next_states[(self.n_step - 1):]
+        n_step_dones = np.full(dones.shape, True)
+        n_step_dones[:-(self.n_step - 1)] = dones[(self.n_step - 1):]
+        return n_step_states, n_step_actions, n_step_rewards, n_step_next_states, n_step_dones
 
     def update_loss(self, episode_key, loss):
         _, state, action, reward, next_state, done = self.episode_mem[episode_key]
