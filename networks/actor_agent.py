@@ -8,12 +8,11 @@ from networks.lstm_based_dddql import LSTMBasedNet
 
 
 class ActorAgent:
-    SEQ_LEN = 80
-    MIN_LEN = 30
 
-    def __init__(self, env, replay_buffer: ReplayBuffer = None, test=False):
+    def __init__(self, env, seq_len, replay_buffer: ReplayBuffer = None, test=False):
         copy.deepcopy(env)
         self.env = env
+        self.seq_len = seq_len
         self.env.reset()
         self.state_size = env.observation_space.shape[0]
         self.action_size = env.action_space.n
@@ -78,8 +77,7 @@ class ActorAgent:
 
                 mem_len = len(state_list)
                 if self.replay_buffer is not None:
-                    if (done and mem_len >= self.MIN_LEN) or mem_len >= self.SEQ_LEN:
-                    # if mem_len >= self.MIN_LEN:
+                    if done or mem_len >= self.seq_len:
                         self.replay_buffer.add_exp(state_list, action_list, reward_list, next_state_list, done_list)
                         middle = round(mem_len / 2)
                         state_list = state_list[-middle:]

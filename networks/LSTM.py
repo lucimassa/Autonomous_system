@@ -30,14 +30,15 @@ def lstm_tutorial():
 
 
 def train_actor_learner_agents():
+    seq_len = 80
     N_STEP = 5
     env = gym.make('CartPole-v1')
     state_size = env.observation_space.shape[0]
     action_size = env.action_space.n
-    replay_buffer = ReplayBuffer(env.observation_space, n_step=N_STEP)
-    actor = ActorAgent(env, replay_buffer)
-    learner = LearnerAgent(state_size, action_size, N_STEP, replay_buffer)
-    EPISODES = 400
+    replay_buffer = ReplayBuffer(env.observation_space, n_step=N_STEP, act_batch_len=round(seq_len/2))
+    actor = ActorAgent(env, seq_len, replay_buffer)
+    learner = LearnerAgent(state_size, action_size, N_STEP, seq_len, replay_buffer)
+    EPISODES = 200
     try:
         learner.load("agent_64")
         print("weights loaded")
@@ -60,8 +61,8 @@ def train_actor_learner_agents():
             for loss, e1, e2, e3, e4, e5 in replay_buffer.episode_mem.values():
                 print(f"len(e): {len(e1)}")
 
-    print(learner.q_net.get_weights())
-    plt.plot([statistics.mean(e) for e in learner.history['loss']])
+    # print(learner.q_net.get_weights())
+    plt.plot([e if isinstance(e, float) else statistics.mean(e) for e in learner.history['loss']])
     plt.show()
 
 
@@ -69,9 +70,9 @@ def test_actor_learner_agents():
     env = gym.make('CartPole-v1', render_mode="human")
     state_size = env.observation_space.shape[0]
     action_size = env.action_space.n
-    replay_buffer = ReplayBuffer(env.observation_space, n_step=5)
-    actor = ActorAgent(env, None)
-    learner = LearnerAgent(state_size, action_size, 5, replay_buffer)
+    replay_buffer = ReplayBuffer(env.observation_space, n_step=5, act_batch_len=80)
+    actor = ActorAgent(env, 80, None)
+    learner = LearnerAgent(state_size, action_size, 5, 80, replay_buffer)
     EPISODES = 5
 
     try:

@@ -9,10 +9,10 @@ from pynverse import inversefunc
 
 
 class LearnerAgent:
-    def __init__(self, state_size, action_size, n_step, replay_buffer: ReplayBuffer):
+    def __init__(self, state_size, action_size, n_step, seq_len, replay_buffer: ReplayBuffer):
         self.state_size = state_size
         self.action_size = action_size
-        self.seq_length = 64
+        self.seq_len = seq_len
         self.replay_buffer = replay_buffer
         self.gamma = 0.995  # discount rate
         self.replace = 20
@@ -54,17 +54,23 @@ class LearnerAgent:
             # first run the RNN to update the state of the net (without training the weights)
             self.reset_net_states()
             print(f"episode_key: {episode_key}")
-            if batch_act is None or batch_train is None:
+            if batch_train is None:
                 print("Not enouth data to train.")
                 return
-            states, actions, rewards, next_states, dones = batch_act
-            states = tf.expand_dims(states, axis=0)
-            next_states = tf.expand_dims(next_states, axis=0)
-            _ = self.q_net.predict(next_states, verbose=0)
+
             q_net_lstm_states_next = self.q_net.get_lstm_states()
-            self.reset_net_states()
-            _ = self.q_net.predict(states, verbose=0)
-            _ = self.target_net.predict(next_states, verbose=0)
+            if batch_act is not None:
+                states, actions, rewards, next_states, dones = batch_act
+                states = tf.expand_dims(states, axis=0)
+                next_states = tf.expand_dims(next_states, axis=0)
+                _ = self.q_net.predict(next_states, verbose=0)
+                q_net_lstm_states_next = self.q_net.get_lstm_states()
+                self.reset_net_states()
+                _ = self.q_net.predict(states, verbose=0)
+                _ = self.target_net.predict(next_states, verbose=0)
+                print("non_empty_batch_act")
+            else:
+                print("empty_batch_act")
 
             states, actions, rewards, next_states, dones = batch_train
             n_step_states = states
