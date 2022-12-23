@@ -14,6 +14,8 @@ class ReplayBuffer:
         self.pointer = 0
         self.n_step = n_step
         self.act_batch_len = act_batch_len
+        self.mu = 0.9
+        self.priority_exponent = 0.9
 
     # def init_episode(self, episode_num: int):
     #     state_mem = np.zeros((self.buffer_size, *(self.observation_space.shape)), dtype=np.float32)
@@ -80,9 +82,15 @@ class ReplayBuffer:
         n_step_dones[:-(self.n_step - 1)] = dones[(self.n_step - 1):]
         return n_step_states, n_step_actions, n_step_rewards, n_step_next_states, n_step_dones
 
-    def update_loss(self, episode_key, loss):
+    def update_loss(self, episode_key, predicted, expected):
         _, state, action, reward, next_state, done = self.episode_mem[episode_key]
-        self.episode_mem[episode_key] = loss, state, action, reward, next_state, done
+        self.episode_mem[episode_key] = self.__calculate_loss(predicted, expected), state, action, reward, next_state, done
+
+    def __calculate_loss(self, predicted, expected):
+        error = np.abs(expected - predicted)
+        loss = self.mu * np.max(error) + (1 - self.mu) * np.mean(error)
+        return loss ** self.priority_exponent
+
 
     def is_filled(self):
         return len(self.episode_mem) == self.buffer_size

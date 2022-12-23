@@ -32,11 +32,13 @@ def lstm_tutorial():
 def train_actor_learner_agents():
     seq_len = 80
     N_STEP = 5
+    starting_epsilon = 0.05
+    batch_size = 32
     env = gym.make('CartPole-v1')
     state_size = env.observation_space.shape[0]
     action_size = env.action_space.n
-    replay_buffer = ReplayBuffer(env.observation_space, n_step=N_STEP, act_batch_len=round(seq_len/2))
-    actor = ActorAgent(env, seq_len, replay_buffer)
+    replay_buffer = ReplayBuffer(env.observation_space, batch_size=batch_size, n_step=N_STEP, act_batch_len=round(seq_len/2))
+    actor = ActorAgent(env, seq_len, replay_buffer, epsilon=starting_epsilon)
     learner = LearnerAgent(state_size, action_size, N_STEP, seq_len, replay_buffer)
     EPISODES = 200
     try:
@@ -47,11 +49,14 @@ def train_actor_learner_agents():
     print(learner.q_net.get_weights())
 
     has_trained_once = False
+    for prep_ep in range(batch_size):
+        actor.act()
     for ep in range(EPISODES):
         print(f"EPISODE: {ep}")
         print(f"epsilon: {actor.epsilon}")
         actor.act()
-        learner.train(epochs=10)
+        if ep >= batch_size:
+            learner.train(epochs=10)
 
         if ep % 5 == 0:
             learner.save("agent_64")

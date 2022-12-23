@@ -145,7 +145,8 @@ class LearnerAgent:
                 loss = self.fit_q_net(n_step_states, q_target, epochs=1)[0]
                 if ep == epochs - 1:
                     # replace loss with better function
-                    self.replay_buffer.update_loss(episode_key, loss)
+                    pred = self.predict_q_net(n_step_states)
+                    self.replay_buffer.update_loss(episode_key, pred, q_target)
                     self.history["loss"].append(loss)
 
     def fit_q_net(self, n_step_states, q_target, epochs=1, change_rnn_states=False):

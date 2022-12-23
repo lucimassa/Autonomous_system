@@ -9,7 +9,7 @@ from networks.lstm_based_dddql import LSTMBasedNet
 
 class ActorAgent:
 
-    def __init__(self, env, seq_len, replay_buffer: ReplayBuffer = None, test=False):
+    def __init__(self, env, seq_len, replay_buffer: ReplayBuffer = None, test=False, epsilon=None):
         copy.deepcopy(env)
         self.env = env
         self.seq_len = seq_len
@@ -19,7 +19,7 @@ class ActorAgent:
         self.replay_buffer = replay_buffer
         self._build_model()
 
-        self.epsilon = 0 if test else 1  # exploration rate
+        self.epsilon = 0 if test else epsilon if epsilon is not None else 1  # exploration rate
         self.epsilon_min = 0.05
         self.epsilon_decay = 0.99
         self.is_initialized = False
