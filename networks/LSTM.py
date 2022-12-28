@@ -14,6 +14,9 @@ from utils.replay_buffer import ReplayBuffer
 import statistics
 
 
+game_name = "ALE/AirRaid-v5"
+# game_name = "CartPole-v1"
+
 
 def lstm_tutorial():
     from tensorflow.python.keras import Sequential
@@ -34,8 +37,8 @@ def train_actor_learner_agents():
     N_STEP = 5
     starting_epsilon = 0.05
     batch_size = 32
-    env = gym.make('CartPole-v1')
-    state_size = env.observation_space.shape[0]
+    env = gym.make(game_name)
+    state_size = list(env.observation_space.shape)
     action_size = env.action_space.n
     replay_buffer = ReplayBuffer(env.observation_space, batch_size=batch_size, n_step=N_STEP, act_batch_len=round(seq_len/2))
     actor = ActorAgent(env, seq_len, replay_buffer, epsilon=starting_epsilon)
@@ -49,14 +52,13 @@ def train_actor_learner_agents():
     print(learner.q_net.get_weights())
 
     has_trained_once = False
-    for prep_ep in range(batch_size):
-        actor.act()
+    # for prep_ep in range(batch_size):
+    #     actor.act()
     for ep in range(EPISODES):
         print(f"EPISODE: {ep}")
         print(f"epsilon: {actor.epsilon}")
         actor.act()
-        if ep >= batch_size:
-            learner.train(epochs=10)
+        learner.train(epochs=10)
 
         if ep % 5 == 0:
             learner.save("agent_64")
@@ -72,8 +74,9 @@ def train_actor_learner_agents():
 
 
 def test_actor_learner_agents():
-    env = gym.make('CartPole-v1', render_mode="human")
-    state_size = env.observation_space.shape[0]
+
+    env = gym.make(game_name, render_mode="human")
+    state_size = list(env.observation_space.shape)
     action_size = env.action_space.n
     replay_buffer = ReplayBuffer(env.observation_space, n_step=5, act_batch_len=80)
     actor = ActorAgent(env, 80, None)
@@ -95,6 +98,17 @@ def test_actor_learner_agents():
         print(f"total reward: {reward}")
 
 
+def test_gym():
+    env = gym.make("LunarLander-v2", render_mode="human")
+    observation, info = env.reset(seed=42)
+    for _ in range(1000):
+        observation, reward, terminated, truncated, info = env.step(env.action_space.sample())
+        env.render()
+
+        if terminated or truncated:
+            observation, info = env.reset()
+
+    env.close()
 
 
 # def test_lstm():

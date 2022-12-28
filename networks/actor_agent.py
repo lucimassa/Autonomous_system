@@ -10,11 +10,10 @@ from networks.lstm_based_dddql import LSTMBasedNet
 class ActorAgent:
 
     def __init__(self, env, seq_len, replay_buffer: ReplayBuffer = None, test=False, epsilon=None):
-        copy.deepcopy(env)
-        self.env = env
+        self.env = copy.deepcopy(env)
         self.seq_len = seq_len
         self.env.reset()
-        self.state_size = env.observation_space.shape[0]
+        self.state_size = list(env.observation_space.shape)
         self.action_size = env.action_space.n
         self.replay_buffer = replay_buffer
         self._build_model()
@@ -26,7 +25,7 @@ class ActorAgent:
 
     def _build_model(self):
         # Neural Net for Deep-Q learning Model
-        self.agent = LSTMBasedNet(action_space_size=self.action_size, batch_size=1)
+        self.agent = LSTMBasedNet(state_size=self.state_size, action_space_size=self.action_size, batch_size=1)
         opt = tf.keras.optimizers.Adam()
 
         # should not be needed to specify the loss function,
@@ -34,7 +33,7 @@ class ActorAgent:
         # loss_func = tf.keras.losses.Huber()
         loss_func = tf.keras.losses.mse
         self.agent.compile(loss=loss_func, optimizer=opt, run_eagerly=True)
-        self.agent.predict(tf.zeros([1, 1, self.state_size]), verbose=0)
+        self.agent.predict(tf.zeros([1, 1] + self.state_size), verbose=0)
 
     def _act(self, state, test=False):
         if np.random.rand() <= self.epsilon and not test:
@@ -48,7 +47,8 @@ class ActorAgent:
         for ep in range(trials):
             done = False
             state, _ = self.env.reset()
-            state = np.reshape(state, [1, self.state_size])
+            state = state.astype(float)
+            state = np.reshape(state, [1] + self.state_size)
             episode_reward = 0
             # self.agent.predict(np.array([state]))
             self.agent.reset_lstm_states()
@@ -63,17 +63,19 @@ class ActorAgent:
                 # env.render()
                 action = self._act(state, test=test)
                 next_state, reward, done, _, _ = self.env.step(action)
+                next_state = next_state.astype(float)
                 if test:
+                    print("rendering")
                     self.env.render()
                 total_reward += reward
 
-                state = np.reshape(state, [self.state_size])
+                state = np.reshape(state, self.state_size)
                 state_list.append(state)
                 action_list.append(action)
                 reward_list.append(reward)
                 next_state_list.append(next_state)
                 done_list.append(done)
-                next_state = np.reshape(next_state, [1, self.state_size])
+                next_state = np.reshape(next_state, [1] + self.state_size)
 
                 mem_len = len(state_list)
                 if self.replay_buffer is not None:

@@ -28,16 +28,16 @@ class LearnerAgent:
 
     def _build_model(self, action_size):
         # Neural Net for Deep-Q learning Model
-        self.q_net = LSTMBasedNet(action_size)
-        self.target_net = LSTMBasedNet(action_size)
+        self.q_net = LSTMBasedNet(state_size=self.state_size, action_space_size=action_size)
+        self.target_net = LSTMBasedNet(state_size=self.state_size, action_space_size=action_size)
         opt = tf.keras.optimizers.Adam(learning_rate=self.learning_rate)
         loss_func = tf.keras.losses.mse
         # loss_func = tf.keras.losses.Huber(delta=5)
         # note: try using Huber loss instad
         self.q_net.compile(loss=loss_func, optimizer=opt, run_eagerly=True)
         self.target_net.compile(loss=loss_func, optimizer=opt, run_eagerly=True)
-        self.q_net.predict(tf.zeros([1, 1, self.state_size]), verbose=0)
-        self.target_net.predict(tf.zeros([1, 1, self.state_size]), verbose=0)
+        self.q_net.predict(tf.zeros([1, 1] + self.state_size), verbose=0)
+        self.target_net.predict(tf.zeros([1, 1] + self.state_size), verbose=0)
         self.q_net.summary()
 
     def update_target(self):
@@ -139,6 +139,17 @@ class LearnerAgent:
         return n_step_reward
 
     def fit_q_net_batch(self, batch, epochs):
+        # X = []
+        # Y = []
+        # keys = []
+        # for ep in range(epochs):
+        #     for lstm_states, n_step_states, q_target, episode_key in batch:
+        #         self.q_net.set_lstm_states(lstm_states)
+        #         X.append((n_step_states[0], lstm_states))
+        #         Y.append(q_target)
+        #         keys.append(episode_key)
+        # losses = self.q_net.fit(X, Y, epochs=1, verbose=0)
+        # print(losses.shape)
         for ep in range(epochs):
             for lstm_states, n_step_states, q_target, episode_key in batch:
                 self.q_net.set_lstm_states(lstm_states)
@@ -153,10 +164,10 @@ class LearnerAgent:
         history = None
         for ep in range(epochs):
             if change_rnn_states:
-                history = self.q_net.fit(n_step_states, q_target, epochs=1, verbose=0)
+                history = self.q_net.train_on_batch(n_step_states, q_target)
             else:
                 q_net_states = self.q_net.get_lstm_states()
-                history = self.q_net.fit(n_step_states, q_target, epochs=1, verbose=0)
+                history = self.q_net.train_on_batch(n_step_states, q_target)
                 self.q_net.set_lstm_states(q_net_states)
         return history.history["loss"]
 

@@ -42,6 +42,8 @@ if __name__ == '__main__':
     #     test_dddql()
     # with tf.device(gpus[0].name):
     with tf.device("/cpu:0"):
+
+        # test_gym()
         train_actor_learner_agents()
         # test_actor_learner_agents()
         # test_lstm()

@@ -4,25 +4,36 @@ import numpy as np
 import tensorflow as tf
 # from tensorflow.python.keras.layers import LSTM, Conv1D
 # from tensorflow.python.keras import Model
+from typing import List
 
 
 class LSTMBasedNet(tf.keras.Model):
 
     LSTM_1_UNITS = 128
     LSTM_2_UNITS = 128
+    CONV_1_UNITS = 64
+    CONV_2_UNITS = 128
     DENSE_1_UNITS = 64
-    DENSE_2_UNITS = 128
-    DENSE_3_UNITS = 64
+    DENSE_2_UNITS = 64
 
-    def __init__(self, action_space_size, batch_size=1, use_lstm_states=True):
+    def __init__(self, state_size: List, action_space_size, batch_size=1, use_lstm_states=True):
         super(LSTMBasedNet, self).__init__()
-        self.dense1 = tf.keras.layers.Conv1D(filters=self.DENSE_1_UNITS, kernel_size=1, activation="relu", name="conv1")
-        self.dense2 = tf.keras.layers.Conv1D(filters=self.DENSE_2_UNITS, kernel_size=1, activation="relu", name="conv2")
-        self.lstm1 = tf.keras.layers.LSTM(self.LSTM_1_UNITS, activation="tanh", return_sequences=True, return_state=True, name="first_LSTM")
-        self.lstm2 = tf.keras.layers.LSTM(self.LSTM_2_UNITS, activation="tanh", return_sequences=True, return_state=True, name="second_LSTM")
-        self.dense3 = tf.keras.layers.Conv1D(filters=self.DENSE_3_UNITS, kernel_size=1, activation="relu", name="conv3")
-        self.v = tf.keras.layers.Conv1D(filters=1, kernel_size=1, activation=None, kernel_regularizer='l2', name="value_conv")
-        self.a = tf.keras.layers.Conv1D(filters=action_space_size, kernel_size=1, activation=None, kernel_regularizer='l2', name="advantage_conv")
+        self.conv1 = tf.keras.layers.Conv3D(filters=self.CONV_1_UNITS, kernel_size=[1, 3, 3],
+                                            activation="relu", name="conv1")
+        self.conv2 = tf.keras.layers.Conv3D(filters=self.CONV_1_UNITS, kernel_size=[1, 3, 3],
+                                            activation="relu", name="conv2")
+        self.max_pooling = tf.keras.layers.MaxPool3D(pool_size=(1, 2, 2))
+        self.dense1 = tf.keras.layers.Conv1D(filters=self.DENSE_1_UNITS, kernel_size=1, activation="relu",
+                                             name="dense1")
+        self.lstm1 = tf.keras.layers.LSTM(self.LSTM_1_UNITS, activation="tanh", return_sequences=True,
+                                          return_state=True, name="first_LSTM")
+        self.lstm2 = tf.keras.layers.LSTM(self.LSTM_2_UNITS, activation="tanh", return_sequences=True,
+                                          return_state=True, name="second_LSTM")
+        self.dense2 = tf.keras.layers.Conv1D(filters=self.DENSE_1_UNITS, kernel_size=1, activation="relu", name="dense2")
+        self.v = tf.keras.layers.Conv1D(filters=1, kernel_size=1, activation=None,
+                                        kernel_regularizer='l2', name="value_conv")
+        self.a = tf.keras.layers.Conv1D(filters=action_space_size, kernel_size=1, activation=None,
+                                        kernel_regularizer='l2', name="advantage_conv")
         # self.v = tf.keras.layers.LSTM(1, activation=None, return_sequences=True, return_state=True, name="value_LSTM")
         # self.a = tf.keras.layers.LSTM(action_space_size, activation=None, return_sequences=True, return_state=True, name="advantage_LSTM")
         # self.v = Dense(1, activation=None, name="value_dense")
@@ -40,8 +51,9 @@ class LSTMBasedNet(tf.keras.Model):
         # self.v_old = tf.keras.layers.Dense(1, activation=None)
         # self.a_old = tf.keras.layers.Dense(action_space_size, activation=None)
 
-    def call(self, state, training=None, mask=None):
-        x = self.core_net(state)
+    def call(self, obs_and_states, training=None, mask=None):
+        obs, lstm_states = self.unpack_input(obs_and_states)
+        x = self.core_net(obs, lstm_states)
         v = self.v(x)
         a = self.a(x)
         # print(f"in call v: {v}; a:{a};\n adv_mean:{tf.math.reduce_mean(a, axis=-1, keepdims=True)}")
@@ -56,26 +68,44 @@ class LSTMBasedNet(tf.keras.Model):
     #     Q = v + (a - tf.math.reduce_mean(a, axis=1, keepdims=True))
     #     return Q
 
-    def advantage(self, state):
-        x = self.core_net(state)
+    def advantage(self, obs_and_states):
+        obs, lstm_states = self.unpack_input(obs_and_states)
+        x = self.core_net(obs, lstm_states)
         a = self.a(x)
         return a
 
-    def value_advantage(self, state):
-        x = self.core_net(state)
+    def value_advantage(self, obs_and_states):
+        obs, lstm_states = self.unpack_input(obs_and_states)
+        x = self.core_net(obs, lstm_states)
         v = self.v(x)
         a = self.a(x)
         Q = v + (a - tf.math.reduce_mean(a, axis=-1, keepdims=True))
         return v, a, (Q, tf.math.reduce_mean(a, axis=-1, keepdims=True))
 
-    def core_net(self, state):
+    def unpack_input(self, obs_and_states):
+        if isinstance(obs_and_states, tuple):
+            obs, lstm_states = obs_and_states
+        else:
+            obs = obs_and_states
+            lstm_states = None
+        return obs, lstm_states
+
+    def core_net(self, obs, lstm_states):
+        if lstm_states is not None:
+            self.set_lstm_states(lstm_states)
         if not self.use_lstm_states:
             self.reset_lstm_states()
-        x = self.dense1(state)
+        x = self.conv1(obs)
+        x = tf.keras.layers.Dropout(0.2)(x)
+        x = self.conv2(x)
+        x = self.max_pooling(x)
+        shape = x.shape
+        x = tf.reshape(x, [shape[0], shape[1], np.prod(shape[2:])])
+        x = self.dense1(x)
         x, state_h_1, state_c_1 = self.lstm1(x, initial_state=self.state_1)
         x, state_h_2, state_c_2 = self.lstm2(x, initial_state=self.state_2)
+        x = tf.keras.layers.Dropout(0.2)(x)
         x = self.dense2(x)
-        x = self.dense3(x)
         self.state_1 = [state_h_1, state_c_1]
         self.state_2 = [state_h_2, state_c_2]
         return x
