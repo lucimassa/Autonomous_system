@@ -6,6 +6,9 @@ import tensorflow as tf
 from utils.replay_buffer import ReplayBuffer
 from networks.lstm_based_dddql import LSTMBasedNet
 
+from utils.preprocessing import get_state_size
+from utils.const import IMG_STACK_COUNT
+
 
 class ActorAgent:
 
@@ -13,14 +16,14 @@ class ActorAgent:
         self.env = copy.deepcopy(env)
         self.seq_len = seq_len
         self.env.reset()
-        self.state_size = list(env.observation_space.shape)
+        self.state_size = get_state_size(list(env.observation_space.shape))
         self.action_size = env.action_space.n
-        self.replay_buffer = replay_buffer
+        self.replay_buffer = replay_buffer if replay_buffer is not None else ReplayBuffer(0, 5, 0)
         self._build_model()
 
         self.epsilon = 0 if test else epsilon if epsilon is not None else 1  # exploration rate
         self.epsilon_min = 0.05
-        self.epsilon_decay = 0.99
+        self.epsilon_decay = 0.995
         self.is_initialized = False
 
     def _build_model(self):
@@ -48,7 +51,11 @@ class ActorAgent:
             done = False
             state, _ = self.env.reset()
             state = state.astype(float)
-            state = np.reshape(state, [1] + self.state_size)
+            state = self.normalize_state(state)
+            state = state.astype('float16')
+            state_queue = [state] * IMG_STACK_COUNT
+            sk_state = self.stack_states(state_queue)
+            sk_state = np.reshape(sk_state, [1] + list(sk_state.shape))
             episode_reward = 0
             # self.agent.predict(np.array([state]))
             self.agent.reset_lstm_states()
@@ -59,23 +66,29 @@ class ActorAgent:
             done_list = []
             saved_something = False
             total_reward = 0
+            debug_first_time = True
             while not done:
-                # env.render()
-                action = self._act(state, test=test)
+                action = self._act(sk_state, test=test)
                 next_state, reward, done, _, _ = self.env.step(action)
-                next_state = next_state.astype(float)
+                if reward != 0:
+                    print(f"reward: {reward}")
+                next_state = self.normalize_state(next_state)
+                # print(f"reward: {reward}")
+                next_state = next_state.astype('float16')
+                state_queue = self.add_to_queue(state_queue, next_state)
+                sk_next_state = self.stack_states(state_queue)
                 if test:
+                    print(f"action: {action}")
                     print("rendering")
                     self.env.render()
                 total_reward += reward
-
-                state = np.reshape(state, self.state_size)
-                state_list.append(state)
+                sk_state = np.reshape(sk_state, list(sk_state.shape)[1:])
+                state_list.append(sk_state)
                 action_list.append(action)
                 reward_list.append(reward)
-                next_state_list.append(next_state)
+                next_state_list.append(sk_next_state)
                 done_list.append(done)
-                next_state = np.reshape(next_state, [1] + self.state_size)
+                sk_next_state = np.reshape(sk_next_state, [1] + list(sk_next_state.shape))
 
                 mem_len = len(state_list)
                 if self.replay_buffer is not None:
@@ -89,7 +102,7 @@ class ActorAgent:
                         done_list = done_list[-middle:]
                         saved_something = True
 
-                state = next_state
+                sk_state = sk_next_state
                 episode_reward += reward
             if saved_something or test:
                 print(f"action_list: {action_list}")
@@ -102,6 +115,22 @@ class ActorAgent:
     def update_epsilon(self):
         self.epsilon = self.epsilon * self.epsilon_decay if self.epsilon > self.epsilon_min else self.epsilon_min
         return self.epsilon
+
+    def normalize_state(self, state):
+        min = 0
+        max = 255
+        range = max - min
+        return (state - min) / range if range > 0 else state - min
+
+    def add_to_queue(self, queue, element):
+        queue.pop(0)
+        queue.append(element)
+        return queue
+
+    def stack_states(self, states):
+        return np.concatenate(states.copy(), axis=-1)
+
+
 
 
 

@@ -2,6 +2,7 @@
 import numpy as np
 import random
 from typing import List
+from utils.const import IMG_STACK_COUNT
 
 
 
@@ -16,6 +17,7 @@ class ReplayBuffer:
         self.act_batch_len = act_batch_len
         self.mu = 0.9
         self.priority_exponent = 0.9
+        self.img_stack_count = IMG_STACK_COUNT
 
     # def init_episode(self, episode_num: int):
     #     state_mem = np.zeros((self.buffer_size, *(self.observation_space.shape)), dtype=np.float32)
@@ -37,7 +39,7 @@ class ReplayBuffer:
 
     def add_exp(self, state: List, action: List, reward: List, next_state: List, done: List):
         # given self.act_batch_len as the size of act batch, the train batch must be at least of size n_step
-        if len(state) % self.act_batch_len >= self.n_step:
+        if len(state) >= self.n_step + 1:
             self.episode_mem[self.pointer] = (len(state),
                                               np.array(state),
                                               np.array(action),
@@ -61,14 +63,14 @@ class ReplayBuffer:
             loss, state, action, reward, next_state, done = self.episode_mem[k]
             state, action, reward, next_state, done = self.n_step_fix(state, action, reward, next_state, done)
 
-            if len(state) <= self.act_batch_len:
-                out.append((None, (state, action, reward, next_state, done), k))
-            else:
-                pivot = self.act_batch_len
-                act_batch = state[:pivot], action[:pivot], reward[:pivot], next_state[:pivot], done[:pivot]
-                train_batch = state[pivot:], action[pivot:], reward[pivot:], next_state[pivot:], done[pivot:]
+            # if len(state) <= self.act_batch_len:
+            #     out.append((None, (state, action, reward, next_state, done), k))
+            # else:
+            pivot = min(self.act_batch_len, len(state) - self.n_step)
+            act_batch = state[:pivot], action[:pivot], reward[:pivot], next_state[:pivot], done[:pivot]
+            train_batch = state[pivot:], action[pivot:], reward[pivot:], next_state[pivot:], done[pivot:]
 
-                out.append((act_batch, train_batch, k))
+            out.append((act_batch, train_batch, k))
         return out
 
     def n_step_fix(self, states, actions, rewards, next_states, dones):
@@ -76,9 +78,10 @@ class ReplayBuffer:
         n_step_states = states
         n_step_actions = actions
         n_step_rewards = rewards
-        n_step_next_states = np.zeros(next_states.shape)
+        # n_step_next_states = np.zeros(next_states.shape)
+        n_step_next_states = np.full(next_states.shape, next_states[-1])
         n_step_next_states[:-(self.n_step - 1)] = next_states[(self.n_step - 1):]
-        n_step_dones = np.full(dones.shape, True)
+        n_step_dones = np.full(dones.shape, dones[-1])          # propagate the last value of done over the last values
         n_step_dones[:-(self.n_step - 1)] = dones[(self.n_step - 1):]
         return n_step_states, n_step_actions, n_step_rewards, n_step_next_states, n_step_dones
 
@@ -91,6 +94,7 @@ class ReplayBuffer:
         loss = self.mu * np.max(error) + (1 - self.mu) * np.mean(error)
         return loss ** self.priority_exponent
 
-
     def is_filled(self):
         return len(self.episode_mem) == self.buffer_size
+
+

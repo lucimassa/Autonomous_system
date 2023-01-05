@@ -12,9 +12,9 @@ from networks.actor_agent import ActorAgent
 from networks.learner_agent import LearnerAgent
 from utils.replay_buffer import ReplayBuffer
 import statistics
+from utils.const import ACT_SEQ_SIZE, BATCH_SIZE, GAME_NAME
 
 
-game_name = "ALE/AirRaid-v5"
 # game_name = "CartPole-v1"
 
 
@@ -33,17 +33,18 @@ def lstm_tutorial():
 
 
 def train_actor_learner_agents():
-    seq_len = 80
     N_STEP = 5
-    starting_epsilon = 0.05
-    batch_size = 32
-    env = gym.make(game_name)
+    starting_epsilon = 1
+    env = gym.make(GAME_NAME)
     state_size = list(env.observation_space.shape)
     action_size = env.action_space.n
-    replay_buffer = ReplayBuffer(env.observation_space, batch_size=batch_size, n_step=N_STEP, act_batch_len=round(seq_len/2))
-    actor = ActorAgent(env, seq_len, replay_buffer, epsilon=starting_epsilon)
-    learner = LearnerAgent(state_size, action_size, N_STEP, seq_len, replay_buffer)
-    EPISODES = 200
+    replay_buffer = ReplayBuffer(env.observation_space, batch_size=BATCH_SIZE, n_step=N_STEP, act_batch_len=round(ACT_SEQ_SIZE/2))
+    actor = ActorAgent(env, ACT_SEQ_SIZE, replay_buffer, epsilon=starting_epsilon)
+    learner = LearnerAgent(state_size, action_size, N_STEP, ACT_SEQ_SIZE, replay_buffer)
+    EPISODES = 500
+
+    # 26: 0.0026550
+
     try:
         learner.load("agent_64")
         print("weights loaded")
@@ -54,11 +55,14 @@ def train_actor_learner_agents():
     has_trained_once = False
     # for prep_ep in range(batch_size):
     #     actor.act()
+    act_num = 0
     for ep in range(EPISODES):
         print(f"EPISODE: {ep}")
         print(f"epsilon: {actor.epsilon}")
+        # for _ in range(5):
+        #     actor.act()
         actor.act()
-        learner.train(epochs=10)
+        learner.train(epochs=5)
 
         if ep % 5 == 0:
             learner.save("agent_64")
@@ -66,7 +70,7 @@ def train_actor_learner_agents():
         actor.update_epsilon()
         if ep % 10 == 0:
             for loss, e1, e2, e3, e4, e5 in replay_buffer.episode_mem.values():
-                print(f"len(e): {len(e1)}")
+                print(f"len(e): {len(e1)}, loss: {loss}")
 
     # print(learner.q_net.get_weights())
     plt.plot([e if isinstance(e, float) else statistics.mean(e) for e in learner.history['loss']])
@@ -75,7 +79,7 @@ def train_actor_learner_agents():
 
 def test_actor_learner_agents():
 
-    env = gym.make(game_name, render_mode="human")
+    env = gym.make(GAME_NAME, render_mode="human")
     state_size = list(env.observation_space.shape)
     action_size = env.action_space.n
     replay_buffer = ReplayBuffer(env.observation_space, n_step=5, act_batch_len=80)
