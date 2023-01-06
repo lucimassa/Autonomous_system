@@ -6,6 +6,7 @@ from utils.const import IMG_STACK_COUNT
 
 
 
+
 class ReplayBuffer:
     def __init__(self, observation_space, n_step, act_batch_len, buffer_size=512, batch_size=32):
         self.buffer_size = buffer_size
@@ -96,5 +97,8 @@ class ReplayBuffer:
 
     def is_filled(self):
         return len(self.episode_mem) == self.buffer_size
+
+    def get_size(self):
+        return len(self.episode_mem)
 
 

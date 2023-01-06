@@ -9,7 +9,7 @@ from typing import List
 
 class LSTMBasedNet(tf.keras.Model):
 
-    LSTM_1_UNITS = 128
+    LSTM_1_UNITS = 256
     LSTM_2_UNITS = 128
     CONV_1_UNITS = 32
     CONV_2_UNITS = 64
@@ -22,26 +22,28 @@ class LSTMBasedNet(tf.keras.Model):
 
     def __init__(self, state_size: List, action_space_size, batch_size=1, use_lstm_states=True):
         super(LSTMBasedNet, self).__init__()
+        activation = "relu"
+        # activation = tf.keras.layers.LeakyReLU(alpha=0.01)
         kr = None       # 'l2'
         self.conv1 = tf.keras.layers.Conv3D(filters=self.CONV_1_UNITS, kernel_size=[1, 8, 8],
-                                            strides=(1, 4, 4), activation=tf.keras.layers.LeakyReLU(alpha=0.01),
+                                            strides=(1, 4, 4), activation=activation,
                                             kernel_regularizer=kr,
                                             name="conv1")
         self.conv2 = tf.keras.layers.Conv3D(filters=self.CONV_2_UNITS, kernel_size=[1, 4, 4],
-                                            strides=(1, 2, 2), activation=tf.keras.layers.LeakyReLU(alpha=0.01),
+                                            strides=(1, 2, 2), activation=activation,
                                             kernel_regularizer=kr,
                                             name="conv2")
         self.conv3 = tf.keras.layers.Conv3D(filters=self.CONV_3_UNITS, kernel_size=[1, 3, 3],
-                                            strides=(1, 1, 1), activation=tf.keras.layers.LeakyReLU(alpha=0.01),
+                                            strides=(1, 1, 1), activation=activation,
                                             kernel_regularizer=kr,
                                             name="conv3")
 
         self.conv4 = tf.keras.layers.Conv3D(filters=self.CONV_4_UNITS, kernel_size=[1, 3, 3],
-                                            strides=(1, 2, 2), activation=tf.keras.layers.LeakyReLU(alpha=0.01),
+                                            strides=(1, 2, 2), activation=activation,
                                             kernel_regularizer=kr,
                                             name="conv4")
         self.conv5 = tf.keras.layers.Conv3D(filters=self.CONV_5_UNITS, kernel_size=[1, 3, 3],
-                                            strides=(1, 2, 2), activation=tf.keras.layers.LeakyReLU(alpha=0.01),
+                                            strides=(1, 2, 2), activation=activation,
                                             kernel_regularizer=kr,
                                             name="conv5")
         # self.conv_tmp = tf.keras.layers.Conv3D(filters=3, kernel_size=[1, 1, 1],
@@ -50,17 +52,18 @@ class LSTMBasedNet(tf.keras.Model):
         #                                        name="conv3")
         self.max_pooling = tf.keras.layers.MaxPool3D(pool_size=(1, 2, 2))
         self.dense1 = tf.keras.layers.Conv1D(filters=self.DENSE_1_UNITS, kernel_size=1,
-                                             activation=tf.keras.layers.LeakyReLU(alpha=0.01),
+                                             activation=activation,
                                              kernel_regularizer=kr,
                                              name="dense1")
-        self.lstm1 = tf.keras.layers.LSTM(self.LSTM_1_UNITS, activation="tanh", return_sequences=True,
+        self.lstm1 = tf.keras.layers.LSTM(self.LSTM_1_UNITS, activation=activation,
+                                          return_sequences=True,
                                           return_state=True, name="first_LSTM")
         self.lstm2 = tf.keras.layers.LSTM(self.LSTM_2_UNITS, activation="tanh", return_sequences=True,
                                           return_state=True, name="second_LSTM")
         self.dense2 = tf.keras.layers.Conv1D(filters=self.DENSE_2_UNITS, kernel_size=1,
-                                             activation=tf.keras.layers.LeakyReLU(alpha=0.01), name="dense2")
+                                             activation=activation, name="dense2")
         self.dense3 = tf.keras.layers.Conv1D(filters=self.DENSE_3_UNITS, kernel_size=1,
-                                             activation=tf.keras.layers.LeakyReLU(alpha=0.01), name="dense3")
+                                             activation=activation, name="dense3")
         self.v = tf.keras.layers.Conv1D(filters=1, kernel_size=1, activation=None,
                                         kernel_regularizer=kr, name="value_conv")
         self.a = tf.keras.layers.Conv1D(filters=action_space_size, kernel_size=1, activation=None,
@@ -74,8 +77,6 @@ class LSTMBasedNet(tf.keras.Model):
         self.use_lstm_states = use_lstm_states
         self.state_1 = None
         self.state_2 = None
-        self.state_v = None
-        self.state_a = None
         self.reset_lstm_states()
         # self.d1_old = tf.keras.layers.Dense(128, activation='relu')
         # self.d2_old = tf.keras.layers.Dense(128, activation='relu')
@@ -141,12 +142,12 @@ class LSTMBasedNet(tf.keras.Model):
         shape = x.shape
         x = tf.reshape(x, [shape[0], shape[1], np.prod(shape[2:])])
         x = self.dense1(x)
-        # x, state_h_1, state_c_1 = self.lstm1(x, initial_state=self.state_1)
+        x, state_h_1, state_c_1 = self.lstm1(x, initial_state=self.state_1)
         # x, state_h_2, state_c_2 = self.lstm2(x, initial_state=self.state_2)
         # x = tf.keras.layers.Dropout(0.2)(x)
         x = self.dense2(x)
         x = self.dense3(x)
-        # self.state_1 = [state_h_1, state_c_1]
+        self.state_1 = [state_h_1, state_c_1]
         # self.state_2 = [state_h_2, state_c_2]
         return x
 
@@ -161,12 +162,11 @@ class LSTMBasedNet(tf.keras.Model):
         self.state_2 = [tf.zeros((self.batch_size, self.LSTM_2_UNITS)), tf.zeros((self.batch_size, self.LSTM_2_UNITS))]
         self.state_v = [tf.zeros((self.batch_size, 1)), tf.zeros((self.batch_size, 1))]
         self.state_a = [tf.zeros((self.batch_size, self.action_space_size)), tf.zeros((self.batch_size, self.action_space_size))]
-
     def get_lstm_states(self):
-        return self.state_1, self.state_2, self.state_v, self.state_a
+        return self.state_1, self.state_2
 
     def set_lstm_states(self, states):
-        self.state_1, self.state_2, self.state_v, self.state_a = states
+        self.state_1, self.state_2 = states
 
     def debug_func(self, obs):
 

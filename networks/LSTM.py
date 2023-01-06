@@ -8,6 +8,7 @@ from tensorflow.python.keras.layers import InputLayer, LSTM
 import tensorflow as tf
 import random
 from typing import List
+
 from networks.actor_agent import ActorAgent
 from networks.learner_agent import LearnerAgent
 from utils.replay_buffer import ReplayBuffer
@@ -41,7 +42,7 @@ def train_actor_learner_agents():
     replay_buffer = ReplayBuffer(env.observation_space, batch_size=BATCH_SIZE, n_step=N_STEP, act_batch_len=round(ACT_SEQ_SIZE/2))
     actor = ActorAgent(env, ACT_SEQ_SIZE, replay_buffer, epsilon=starting_epsilon)
     learner = LearnerAgent(state_size, action_size, N_STEP, ACT_SEQ_SIZE, replay_buffer)
-    EPISODES = 500
+    EPISODES = 200
 
     # 26: 0.0026550
 
@@ -59,9 +60,12 @@ def train_actor_learner_agents():
     for ep in range(EPISODES):
         print(f"EPISODE: {ep}")
         print(f"epsilon: {actor.epsilon}")
+        print(f"buffer_filled: {replay_buffer.get_size}")
         # for _ in range(5):
         #     actor.act()
-        actor.act()
+        if act_num < 1:
+            actor.act()
+            act_num += 1
         learner.train(epochs=5)
 
         if ep % 5 == 0:
