@@ -60,12 +60,10 @@ def train_actor_learner_agents():
     for ep in range(EPISODES):
         print(f"EPISODE: {ep}")
         print(f"epsilon: {actor.epsilon}")
-        print(f"buffer_filled: {replay_buffer.get_size}")
+        print(f"buffer_filled: {replay_buffer.get_size()}")
         # for _ in range(5):
         #     actor.act()
-        if act_num < 1:
-            actor.act()
-            act_num += 1
+        actor.act()
         learner.train(epochs=5)
 
         if ep % 5 == 0:

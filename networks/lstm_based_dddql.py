@@ -22,8 +22,8 @@ class LSTMBasedNet(tf.keras.Model):
 
     def __init__(self, state_size: List, action_space_size, batch_size=1, use_lstm_states=True):
         super(LSTMBasedNet, self).__init__()
-        activation = "relu"
-        # activation = tf.keras.layers.LeakyReLU(alpha=0.01)
+        # activation = "relu"
+        activation = tf.keras.layers.LeakyReLU(alpha=0.01)
         kr = None       # 'l2'
         self.conv1 = tf.keras.layers.Conv3D(filters=self.CONV_1_UNITS, kernel_size=[1, 8, 8],
                                             strides=(1, 4, 4), activation=activation,
