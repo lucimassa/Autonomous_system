@@ -2,20 +2,20 @@
 import numpy as np
 import random
 from typing import List
-from utils.const import IMG_STACK_COUNT
+from utils.const import IMG_STACK_COUNT, BUFFER_SIZE
 
 
 
 
 class ReplayBuffer:
-    def __init__(self, observation_space, n_step, act_batch_len, buffer_size=512, batch_size=32):
-        self.buffer_size = buffer_size
+    def __init__(self, observation_space, n_step, train_batch_len, batch_size=32):
+        self.buffer_size = BUFFER_SIZE
         self.batch_size = batch_size
         self.episode_mem = {}
         self.observation_space = observation_space
         self.pointer = 0
         self.n_step = n_step
-        self.act_batch_len = act_batch_len
+        self.train_batch_len = train_batch_len
         self.mu = 0.9
         self.priority_exponent = 0.9
         self.img_stack_count = IMG_STACK_COUNT
@@ -42,10 +42,10 @@ class ReplayBuffer:
         # given self.act_batch_len as the size of act batch, the train batch must be at least of size n_step
         if len(state) >= self.n_step + 1:
             self.episode_mem[self.pointer] = (len(state),
-                                              np.array(state),
+                                              self.compress_state(np.array(state)),
                                               np.array(action),
                                               np.array(reward),
-                                              np.array(next_state),
+                                              self.compress_state(np.array(next_state)),
                                               np.array(done))
             self.pointer = (self.pointer + 1) % self.buffer_size
 
@@ -63,15 +63,18 @@ class ReplayBuffer:
         for k in key:
             loss, state, action, reward, next_state, done = self.episode_mem[k]
             state, action, reward, next_state, done = self.n_step_fix(state, action, reward, next_state, done)
+            state = self.extract_state(state)
+            next_state = self.extract_state(next_state)
 
-            # if len(state) <= self.act_batch_len:
-            #     out.append((None, (state, action, reward, next_state, done), k))
-            # else:
-            pivot = min(self.act_batch_len, len(state) - self.n_step)
-            act_batch = state[:pivot], action[:pivot], reward[:pivot], next_state[:pivot], done[:pivot]
-            train_batch = state[pivot:], action[pivot:], reward[pivot:], next_state[pivot:], done[pivot:]
 
-            out.append((act_batch, train_batch, k))
+            if len(state) <= self.train_batch_len:
+                out.append((None, (state, action, reward, next_state, done), k))
+            else:
+                pivot = self.train_batch_len
+                act_batch = state[:pivot], action[:pivot], reward[:pivot], next_state[:pivot], done[:pivot]
+                train_batch = state[pivot:], action[pivot:], reward[pivot:], next_state[pivot:], done[pivot:]
+
+                out.append((act_batch, train_batch, k))
         return out
 
     def n_step_fix(self, states, actions, rewards, next_states, dones):
@@ -100,5 +103,17 @@ class ReplayBuffer:
 
     def get_size(self):
         return len(self.episode_mem)
+
+    def compress_state(self, state):
+        min = 0
+        max = 255
+        range = max - min
+        return np.rint(state * range + min)
+
+    def extract_state(self, state):
+        min = 0
+        max = 255
+        range = max - min
+        return (state - min) / range if range > 0 else state - min
 
 

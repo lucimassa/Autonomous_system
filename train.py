@@ -38,12 +38,12 @@ if __name__ == '__main__':
     gpus = tf.config.list_logical_devices('GPU')
     # with tf.device(gpus[0].name):
     #     test_ddql()
-    # with tf.device(gpus[0].name):
+    # with tf.devicevvvv (gpus[0].name):
     #     test_dddql()
     with tf.device(gpus[0].name):
     # with tf.device("/cpu:0"):
 
-        # test_gym()
+        # test_gym()x
         train_actor_learner_agents()
         # test_actor_learner_agents()
         # test_lstm()

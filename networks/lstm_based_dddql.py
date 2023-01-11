@@ -16,14 +16,14 @@ class LSTMBasedNet(tf.keras.Model):
     CONV_3_UNITS = 64
     CONV_4_UNITS = 64
     CONV_5_UNITS = 64
-    DENSE_1_UNITS = 64
+    DENSE_1_UNITS = 128
     DENSE_2_UNITS = 128
     DENSE_3_UNITS = 64
 
     def __init__(self, state_size: List, action_space_size, batch_size=1, use_lstm_states=True):
         super(LSTMBasedNet, self).__init__()
-        # activation = "relu"
-        activation = tf.keras.layers.LeakyReLU(alpha=0.01)
+        activation = "relu"
+        # activation = tf.keras.layers.LeakyReLU(alpha=0.01)
         kr = None       # 'l2'
         self.conv1 = tf.keras.layers.Conv3D(filters=self.CONV_1_UNITS, kernel_size=[1, 8, 8],
                                             strides=(1, 4, 4), activation=activation,
@@ -33,17 +33,17 @@ class LSTMBasedNet(tf.keras.Model):
                                             strides=(1, 2, 2), activation=activation,
                                             kernel_regularizer=kr,
                                             name="conv2")
-        self.conv3 = tf.keras.layers.Conv3D(filters=self.CONV_3_UNITS, kernel_size=[1, 3, 3],
-                                            strides=(1, 1, 1), activation=activation,
+        self.conv3 = tf.keras.layers.Conv3D(filters=self.CONV_3_UNITS, kernel_size=[1, 4, 4],
+                                            strides=(1, 2, 2), activation=activation,
                                             kernel_regularizer=kr,
                                             name="conv3")
 
-        self.conv4 = tf.keras.layers.Conv3D(filters=self.CONV_4_UNITS, kernel_size=[1, 3, 3],
+        self.conv4 = tf.keras.layers.Conv3D(filters=self.CONV_4_UNITS, kernel_size=[1, 4, 4],
                                             strides=(1, 2, 2), activation=activation,
                                             kernel_regularizer=kr,
                                             name="conv4")
         self.conv5 = tf.keras.layers.Conv3D(filters=self.CONV_5_UNITS, kernel_size=[1, 3, 3],
-                                            strides=(1, 2, 2), activation=activation,
+                                            strides=(1, 1, 1), activation=activation,
                                             kernel_regularizer=kr,
                                             name="conv5")
         # self.conv_tmp = tf.keras.layers.Conv3D(filters=3, kernel_size=[1, 1, 1],
@@ -136,16 +136,16 @@ class LSTMBasedNet(tf.keras.Model):
         x = self.conv2(x)
         x = self.conv3(x)
         # x = self.conv4(x)
-        # x = self.conv5(x)
-        # x = self.max_pooling(x)
+        x = self.conv5(x)
+        x = self.max_pooling(x)
 
         shape = x.shape
         x = tf.reshape(x, [shape[0], shape[1], np.prod(shape[2:])])
-        x = self.dense1(x)
+        # x = self.dense1(x)
         x, state_h_1, state_c_1 = self.lstm1(x, initial_state=self.state_1)
         # x, state_h_2, state_c_2 = self.lstm2(x, initial_state=self.state_2)
         # x = tf.keras.layers.Dropout(0.2)(x)
-        x = self.dense2(x)
+        # x = self.dense2(x)
         x = self.dense3(x)
         self.state_1 = [state_h_1, state_c_1]
         # self.state_2 = [state_h_2, state_c_2]

@@ -1,5 +1,6 @@
 
 import numpy as np
+import time
 
 import tensorflow as tf
 from typing import List
@@ -8,6 +9,7 @@ from networks.lstm_based_dddql import LSTMBasedNet
 from pynverse import inversefunc
 
 from utils.preprocessing import get_state_size
+from utils.const import OPTIMIZER
 
 
 class LearnerAgent:
@@ -17,17 +19,16 @@ class LearnerAgent:
         self.seq_len = seq_len
         self.replay_buffer = replay_buffer
         self.gamma = 0.995  # discount rate
-        self.replace = 5
+        self.replace = 100
         self.trainstep = 0
-        self.learning_rate = 0.001  # 0.001
         self.momentum = 0.9
         self._build_model(action_size)
         self.net_chckpoint = None
         self.history = {}
         self.history["loss"] = []
-        self.debug = True
+        self.debug = False
         self.n_step = n_step
-        self.epsilon = .01      # .001
+        self.epsilon = .001
 
         # for debug only
         self.replaced_times = 0
@@ -37,7 +38,7 @@ class LearnerAgent:
         self.q_net = LSTMBasedNet(state_size=self.state_size, action_space_size=action_size)
         self.target_net = LSTMBasedNet(state_size=self.state_size, action_space_size=action_size)
         # opt = tf.keras.optimizers.SGD(learning_rate=self.learning_rate, momentum=self.momentum)
-        opt = tf.keras.optimizers.Adam(learning_rate=self.learning_rate)
+        opt = OPTIMIZER
         loss_func = tf.keras.losses.mse
         # loss_func = tf.keras.losses.Huber(delta=5)
         # note: try using Huber loss instad
@@ -60,6 +61,7 @@ class LearnerAgent:
         batch = []
         for batch_act, batch_train, episode_key in self.replay_buffer.sample_exp():
 
+            start = time.time()
             # first run the RNN to update the state of the net (without training the weights)
             self.reset_net_states()
             print(f"episode_key: {episode_key}")
@@ -77,7 +79,7 @@ class LearnerAgent:
                 self.reset_net_states()
                 _ = self.q_net.predict(states, verbose=0)
                 _ = self.target_net.predict(next_states, verbose=0)
-                print("non_empty_batch_act")
+                # print("non_empty_batch_act")
             else:
                 print("empty_batch_act")
 
@@ -94,8 +96,11 @@ class LearnerAgent:
                 n_step_next_states = n_step_next_states[:-(self.n_step - 1)]
                 n_step_dones = n_step_dones[:-(self.n_step - 1)]
 
+
             n_step_states = tf.expand_dims(n_step_states, axis=0)             # add batch size as 1
             n_step_next_states = tf.expand_dims(n_step_next_states, axis=0)
+
+
 
             target = self.predict_q_net(n_step_states)
             next_state_val = self.predict_target_net(n_step_next_states)
@@ -117,6 +122,7 @@ class LearnerAgent:
                 print(f"next_values_qnet: {self.predict_q_net(n_step_next_states, lstm_states=q_net_lstm_states_next)}")
                 print(f"max_action: {max_action}")
                 print(f"n_step_actions: {n_step_actions}")
+                print(f"n_step_rewards: {n_step_rewards}")
                 print(f"next_valus_target: {next_state_val}")
                 print(f"episode_key: {episode_key}")
                 print(f"replay buffer priorities:: {[(key, self.replay_buffer.episode_mem[key][0]) for key in self.replay_buffer.episode_mem.keys()]}")
@@ -144,7 +150,9 @@ class LearnerAgent:
             loss = None
             # loss = self.fit_q_net(n_step_states, q_target, epochs=1)
             # self.replay_buffer.update_loss(episode_key, loss[0])
+        start = time.time()
         self.fit_q_net_batch(batch, epochs)
+        print(f"fit_time: {time.time() - start}")
 
     # def h(self, x: np.ndarray):
     #     return np.sign(x) * (np.sqrt(np.absolute(x) + 1) - 1) + self.epsilon * x

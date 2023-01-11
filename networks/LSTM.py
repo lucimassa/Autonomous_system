@@ -13,7 +13,7 @@ from networks.actor_agent import ActorAgent
 from networks.learner_agent import LearnerAgent
 from utils.replay_buffer import ReplayBuffer
 import statistics
-from utils.const import ACT_SEQ_SIZE, BATCH_SIZE, GAME_NAME
+from utils.const import ACT_SEQ_SIZE, BATCH_SIZE, GAME_NAME, MIN_BUFFER_SIZE
 
 
 # game_name = "CartPole-v1"
@@ -35,11 +35,11 @@ def lstm_tutorial():
 
 def train_actor_learner_agents():
     N_STEP = 5
-    starting_epsilon = 1
+    starting_epsilon = .6
     env = gym.make(GAME_NAME)
     state_size = list(env.observation_space.shape)
     action_size = env.action_space.n
-    replay_buffer = ReplayBuffer(env.observation_space, batch_size=BATCH_SIZE, n_step=N_STEP, act_batch_len=round(ACT_SEQ_SIZE/2))
+    replay_buffer = ReplayBuffer(env.observation_space, batch_size=BATCH_SIZE, n_step=N_STEP, train_batch_len=round(ACT_SEQ_SIZE / 2))
     actor = ActorAgent(env, ACT_SEQ_SIZE, replay_buffer, epsilon=starting_epsilon)
     learner = LearnerAgent(state_size, action_size, N_STEP, ACT_SEQ_SIZE, replay_buffer)
     EPISODES = 200
@@ -57,14 +57,20 @@ def train_actor_learner_agents():
     # for prep_ep in range(batch_size):
     #     actor.act()
     act_num = 0
+    rewards_list = []
+    test_num = 5
     for ep in range(EPISODES):
         print(f"EPISODE: {ep}")
         print(f"epsilon: {actor.epsilon}")
         print(f"buffer_filled: {replay_buffer.get_size()}")
         # for _ in range(5):
         #     actor.act()
-        actor.act()
-        learner.train(epochs=5)
+        tot_reward = actor.act()
+        # rewards_list.append(tot_reward)
+        if replay_buffer.get_size() < MIN_BUFFER_SIZE:
+            actor.epsilon = starting_epsilon
+            continue
+        learner.train(epochs=1)
 
         if ep % 5 == 0:
             learner.save("agent_64")
@@ -73,9 +79,15 @@ def train_actor_learner_agents():
         if ep % 10 == 0:
             for loss, e1, e2, e3, e4, e5 in replay_buffer.episode_mem.values():
                 print(f"len(e): {len(e1)}, loss: {loss}")
-
-    # print(learner.q_net.get_weights())
-    plt.plot([e if isinstance(e, float) else statistics.mean(e) for e in learner.history['loss']])
+            mean_reward = 0
+            for _ in range(test_num):
+                mean_reward = mean_reward + actor.act(test=True) / test_num
+            rewards_list.append(mean_reward)
+            print(f"mean_reward: {mean_reward}")
+            # print("plotting")
+            # plt.plot(rewards_list)
+            # plt.draw()
+    plt.plot(rewards_list)
     plt.show()
 
 
@@ -84,7 +96,7 @@ def test_actor_learner_agents():
     env = gym.make(GAME_NAME, render_mode="human")
     state_size = list(env.observation_space.shape)
     action_size = env.action_space.n
-    replay_buffer = ReplayBuffer(env.observation_space, n_step=5, act_batch_len=80)
+    replay_buffer = ReplayBuffer(env.observation_space, n_step=5, train_batch_len=80)
     actor = ActorAgent(env, 80, None)
     learner = LearnerAgent(state_size, action_size, 5, 80, replay_buffer)
     EPISODES = 5
@@ -100,7 +112,7 @@ def test_actor_learner_agents():
     has_trained_once = False
     for ep in range(EPISODES):
         print(f"EPISODE: {ep}")
-        reward = actor.act(test=True)
+        reward = actor.act(test=True, render=True)
         print(f"total reward: {reward}")
 
 
