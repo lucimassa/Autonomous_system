@@ -38,14 +38,13 @@ class ReplayBuffer:
     #     pointer = 0
     #     self.episode_mem[episode_num] = (state_mem, action_mem, reward_mem, next_state_mem, done_mem, pointer)
 
-    def add_exp(self, state: List, action: List, reward: List, next_state: List, done: List):
+    def add_exp(self, state: List, action: List, reward: List, done: List):
         # given self.act_batch_len as the size of act batch, the train batch must be at least of size n_step
         if len(state) >= self.n_step + 1:
-            self.episode_mem[self.pointer] = (len(state),
+            self.episode_mem[self.pointer] = (1,
                                               self.compress_state(np.array(state)),
                                               np.array(action),
                                               np.array(reward),
-                                              self.compress_state(np.array(next_state)),
                                               np.array(done))
             self.pointer = (self.pointer + 1) % self.buffer_size
 
@@ -61,11 +60,13 @@ class ReplayBuffer:
         # episode_num = 0
         out = []
         for k in key:
-            loss, state, action, reward, next_state, done = self.episode_mem[k]
-            state, action, reward, next_state, done = self.n_step_fix(state, action, reward, next_state, done)
+            loss, state, action, reward, done = self.episode_mem[k]
             state = self.extract_state(state)
-            next_state = self.extract_state(next_state)
-
+            next_state = state[1:]
+            state = state[:-1]
+            state = self.stack_states(state)
+            next_state = self.stack_states(next_state)
+            state, action, reward, next_state, done = self.n_step_fix(state, action, reward, next_state, done)
 
             if len(state) <= self.train_batch_len:
                 out.append((None, (state, action, reward, next_state, done), k))
@@ -90,8 +91,8 @@ class ReplayBuffer:
         return n_step_states, n_step_actions, n_step_rewards, n_step_next_states, n_step_dones
 
     def update_loss(self, episode_key, predicted, expected):
-        _, state, action, reward, next_state, done = self.episode_mem[episode_key]
-        self.episode_mem[episode_key] = self.__calculate_loss(predicted, expected), state, action, reward, next_state, done
+        _, state, action, reward, done = self.episode_mem[episode_key]
+        self.episode_mem[episode_key] = self.__calculate_loss(predicted, expected), state, action, reward, done
 
     def __calculate_loss(self, predicted, expected):
         error = np.abs(expected - predicted)
@@ -115,5 +116,12 @@ class ReplayBuffer:
         max = 255
         range = max - min
         return (state - min) / range if range > 0 else state - min
+
+    def stack_states(self, states):
+        stacks = np.full((self.img_stack_count, *states.shape), states[0])
+        stacks[0, :] = states
+        for i in range(1, self.img_stack_count):
+            stacks[i, i:] = states[:-i]
+        return np.concatenate(stacks, axis=-1)
 
 

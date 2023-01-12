@@ -18,8 +18,8 @@ class LearnerAgent:
         self.action_size = action_size
         self.seq_len = seq_len
         self.replay_buffer = replay_buffer
-        self.gamma = 0.995  # discount rate
-        self.replace = 100
+        self.gamma = 0.95  # discount rate
+        self.replace = 50
         self.trainstep = 0
         self.momentum = 0.9
         self._build_model(action_size)
