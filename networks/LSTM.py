@@ -35,7 +35,7 @@ def lstm_tutorial():
 
 def train_actor_learner_agents():
     N_STEP = 5
-    starting_epsilon = 1
+    starting_epsilon = 0.1
     env = gym.make(GAME_NAME)
     state_size = list(env.observation_space.shape)
     action_size = env.action_space.n

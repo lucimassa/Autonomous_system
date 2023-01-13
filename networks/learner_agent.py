@@ -96,6 +96,10 @@ class LearnerAgent:
                 n_step_next_states = n_step_next_states[:-(self.n_step - 1)]
                 n_step_dones = n_step_dones[:-(self.n_step - 1)]
 
+            if len(n_step_states) == 0:
+                print("sequnce too short")
+                continue
+
 
             n_step_states = tf.expand_dims(n_step_states, axis=0)             # add batch size as 1
             n_step_next_states = tf.expand_dims(n_step_next_states, axis=0)

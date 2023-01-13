@@ -9,7 +9,7 @@ from typing import List
 
 class LSTMBasedNet(tf.keras.Model):
 
-    LSTM_1_UNITS = 256
+    LSTM_1_UNITS = 128
     LSTM_2_UNITS = 128
     CONV_1_UNITS = 32
     CONV_2_UNITS = 64
@@ -134,11 +134,10 @@ class LSTMBasedNet(tf.keras.Model):
         # print(f"shape_conv1: {x.shape}")
         # x = tf.keras.layers.Dropout(0.2)(x)
         x = self.conv2(x)
-        x = self.conv3(x)
+        # x = self.conv3(x)
         # x = self.conv4(x)
         x = self.conv5(x)
-        x = self.max_pooling(x)
-
+        # x = self.max_pooling(x)
         shape = x.shape
         x = tf.reshape(x, [shape[0], shape[1], np.prod(shape[2:])])
         # x = self.dense1(x)

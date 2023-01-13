@@ -40,7 +40,7 @@ class ReplayBuffer:
 
     def add_exp(self, state: List, action: List, reward: List, done: List):
         # given self.act_batch_len as the size of act batch, the train batch must be at least of size n_step
-        if len(state) >= self.n_step + 1:
+        if len(action) >= self.n_step + 1:
             self.episode_mem[self.pointer] = (1,
                                               self.compress_state(np.array(state)),
                                               np.array(action),
