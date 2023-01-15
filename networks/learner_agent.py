@@ -3,13 +3,14 @@ import numpy as np
 import time
 
 import tensorflow as tf
+import pickle
 from typing import List
 from utils.replay_buffer import ReplayBuffer
 from networks.lstm_based_dddql import LSTMBasedNet
 from pynverse import inversefunc
 
 from utils.preprocessing import get_state_size
-from utils.const import OPTIMIZER
+from utils.const import OPTIMIZER, DICOUNT_RATE, SAVE_AGENT_NAME
 
 
 class LearnerAgent:
@@ -18,7 +19,7 @@ class LearnerAgent:
         self.action_size = action_size
         self.seq_len = seq_len
         self.replay_buffer = replay_buffer
-        self.gamma = 0.95  # discount rate
+        self.gamma = DICOUNT_RATE  # discount rate
         self.replace = 50
         self.trainstep = 0
         self.momentum = 0.9
@@ -234,14 +235,28 @@ class LearnerAgent:
 
         return out
 
-    def load(self, name: str):
-        weights = np.load(name + ".npy", allow_pickle=True)
-        self.q_net.set_weights(weights)
-        self.target_net.set_weights(weights)
-
     def save(self, name):
-        weights = np.array(self.q_net.get_weights(), dtype="object")
-        np.save(name + ".npy", weights, allow_pickle=True)
+        self.q_net.save_weights(f'{name}_weights.h5')
+        weight_values = self.q_net.optimizer.get_weights()
+        with open(f'{name}_optimizer.pkl', 'wb') as f:
+            pickle.dump(weight_values, f)
+        # weights = np.array(self.q_net.get_weights(), dtype="object")
+        # np.save(name + ".npy", weights, allow_pickle=True)
+
+    def load(self, name: str):
+        self.q_net.make_train_function()
+        with open(f'{name}_optimizer.pkl', 'rb') as f:
+            weight_values = pickle.load(f)
+
+        grad_vars = self.q_net.trainable_weights
+        zero_grads = [tf.zeros_like(w) for w in grad_vars]
+        self.q_net.optimizer.apply_gradients(zip(zero_grads, grad_vars))
+        self.q_net.optimizer.set_weights(weight_values)
+
+        self.q_net.load_weights(f'{name}_weights.h5')
+        # weights = np.load(name + ".npy", allow_pickle=True)
+        # self.q_net.set_weights(weights)
+        # self.target_net.set_weights(weights)
 
     def reset_net_states(self):
         self.q_net.reset_lstm_states()

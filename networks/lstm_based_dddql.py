@@ -33,8 +33,8 @@ class LSTMBasedNet(tf.keras.Model):
                                             strides=(1, 2, 2), activation=activation,
                                             kernel_regularizer=kr,
                                             name="conv2")
-        self.conv3 = tf.keras.layers.Conv3D(filters=self.CONV_3_UNITS, kernel_size=[1, 4, 4],
-                                            strides=(1, 2, 2), activation=activation,
+        self.conv3 = tf.keras.layers.Conv3D(filters=self.CONV_3_UNITS, kernel_size=[1, 3, 3],
+                                            strides=(1, 1, 1), activation=activation,
                                             kernel_regularizer=kr,
                                             name="conv3")
 
@@ -134,7 +134,7 @@ class LSTMBasedNet(tf.keras.Model):
         # print(f"shape_conv1: {x.shape}")
         # x = tf.keras.layers.Dropout(0.2)(x)
         x = self.conv2(x)
-        # x = self.conv3(x)
+        x = self.conv3(x)
         # x = self.conv4(x)
         x = self.conv5(x)
         # x = self.max_pooling(x)

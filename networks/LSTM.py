@@ -13,7 +13,8 @@ from networks.actor_agent import ActorAgent
 from networks.learner_agent import LearnerAgent
 from utils.replay_buffer import ReplayBuffer
 import statistics
-from utils.const import ACT_SEQ_SIZE, BATCH_SIZE, GAME_NAME, MIN_BUFFER_SIZE
+from utils.const import ACT_SEQ_SIZE, BATCH_SIZE, GAME_NAME, MIN_BUFFER_SIZE, SAVE_AGENT_NAME
+from utils.file_manager import save_learner, load_learner
 
 
 # game_name = "CartPole-v1"
@@ -35,21 +36,24 @@ def lstm_tutorial():
 
 def train_actor_learner_agents():
     N_STEP = 5
-    starting_epsilon = 0.1
+    starting_epsilon = .1
     env = gym.make(GAME_NAME)
     state_size = list(env.observation_space.shape)
     action_size = env.action_space.n
     replay_buffer = ReplayBuffer(env.observation_space, batch_size=BATCH_SIZE, n_step=N_STEP, train_batch_len=round(ACT_SEQ_SIZE / 2))
     actor = ActorAgent(env, ACT_SEQ_SIZE, replay_buffer, epsilon=starting_epsilon)
     learner = LearnerAgent(state_size, action_size, N_STEP, ACT_SEQ_SIZE, replay_buffer)
-    EPISODES = 200
+    EPISODES = 500
 
     # 26: 0.0026550
 
     try:
-        learner.load("agent_64")
+        # learner = load_learner()
+        learner.load(SAVE_AGENT_NAME)
+        actor.update(learner.q_net)
         print("weights loaded")
     except IOError:
+        learner = LearnerAgent(state_size, action_size, N_STEP, ACT_SEQ_SIZE, replay_buffer)
         print("unable to load weights")
     print(learner.q_net.get_weights())
 
@@ -73,7 +77,9 @@ def train_actor_learner_agents():
         learner.train(epochs=1)
 
         if ep % 5 == 0:
-            learner.save("agent_64")
+            print("saving learner")
+            # save_learner(learner)
+            learner.save(SAVE_AGENT_NAME)
             actor.update(learner.q_net)
         actor.update_epsilon()
         if ep % 10 == 0:
@@ -102,10 +108,12 @@ def test_actor_learner_agents():
     EPISODES = 5
 
     try:
-        learner.load("agent_64")
+        # learner = load_learner()
+        learner.load(SAVE_AGENT_NAME)
         actor.update(learner.q_net)
         print("weights loaded")
     except FileNotFoundError:
+        learner = LearnerAgent(state_size, action_size, 5, 80, replay_buffer)
         print("unable to load weights")
         return
 
@@ -127,5 +135,6 @@ def test_gym():
             observation, info = env.reset()
 
     env.close()
+
 
 

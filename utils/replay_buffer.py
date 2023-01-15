@@ -68,10 +68,10 @@ class ReplayBuffer:
             next_state = self.stack_states(next_state)
             state, action, reward, next_state, done = self.n_step_fix(state, action, reward, next_state, done)
 
-            if len(state) <= self.train_batch_len + self.n_step:
+            if len(state) <= self.n_step + 1:
                 out.append((None, (state, action, reward, next_state, done), k))
             else:
-                pivot = self.train_batch_len
+                pivot = min(self.train_batch_len, len(state) - (self.n_step + 2))
                 act_batch = state[:pivot], action[:pivot], reward[:pivot], next_state[:pivot], done[:pivot]
                 train_batch = state[pivot:], action[pivot:], reward[pivot:], next_state[pivot:], done[pivot:]
 
