@@ -13,8 +13,8 @@ from networks.actor_agent import ActorAgent
 from networks.learner_agent import LearnerAgent
 from utils.replay_buffer import ReplayBuffer
 import statistics
-from utils.const import ACT_SEQ_SIZE, BATCH_SIZE, GAME_NAME, MIN_BUFFER_SIZE, SAVE_AGENT_NAME
-from utils.file_manager import save_learner, load_learner
+from utils.const import ACT_SEQ_SIZE, BATCH_SIZE, GAME_NAME, MIN_BUFFER_SIZE, SAVE_AGENT_NAME, N_STEP, TOTAL_TRAIN_STEPS
+from utils.file_manager import save_learner, load_learner, restore_results, load_confs, save_confs
 
 
 # game_name = "CartPole-v1"
@@ -35,22 +35,23 @@ def lstm_tutorial():
 
 
 def train_actor_learner_agents():
-    N_STEP = 5
-    starting_epsilon = .1
+    starting_epsilon = 1
     env = gym.make(GAME_NAME)
     state_size = list(env.observation_space.shape)
     action_size = env.action_space.n
     replay_buffer = ReplayBuffer(env.observation_space, batch_size=BATCH_SIZE, n_step=N_STEP, train_batch_len=round(ACT_SEQ_SIZE / 2))
     actor = ActorAgent(env, ACT_SEQ_SIZE, replay_buffer, epsilon=starting_epsilon)
     learner = LearnerAgent(state_size, action_size, N_STEP, ACT_SEQ_SIZE, replay_buffer)
-    EPISODES = 500
 
+    train_step = 0
     # 26: 0.0026550
 
     try:
         # learner = load_learner()
         learner.load(SAVE_AGENT_NAME)
         actor.update(learner.q_net)
+        train_step = load_confs()
+        actor.update_epsilon(train_step)
         print("weights loaded")
     except IOError:
         learner = LearnerAgent(state_size, action_size, N_STEP, ACT_SEQ_SIZE, replay_buffer)
@@ -61,38 +62,49 @@ def train_actor_learner_agents():
     # for prep_ep in range(batch_size):
     #     actor.act()
     act_num = 0
-    rewards_list = []
+    try:
+        rewards_list = restore_results()
+        actor.results = rewards_list
+        print(f"reward_list: {len(rewards_list)}")
+    except:
+        print("unable to load results")
+        rewards_list = []
     test_num = 5
-    for ep in range(EPISODES):
-        print(f"EPISODE: {ep}")
+    t = 0
+    while train_step < TOTAL_TRAIN_STEPS:
+        print(f"train_step: {train_step}")
         print(f"epsilon: {actor.epsilon}")
         print(f"buffer_filled: {replay_buffer.get_size()}")
         # for _ in range(5):
         #     actor.act()
-        tot_reward = actor.act()
+        tot_reward, saved_chunks = actor.act()
         # rewards_list.append(tot_reward)
         if replay_buffer.get_size() < MIN_BUFFER_SIZE:
             actor.epsilon = starting_epsilon
             continue
-        learner.train(epochs=1)
+        train_batch_size = saved_chunks*2
+        learner.train(epochs=1, batch_size=train_batch_size)
 
-        if ep % 5 == 0:
+        if t % 5 == 0:
             print("saving learner")
             # save_learner(learner)
             learner.save(SAVE_AGENT_NAME)
+            actor.save_scores(SAVE_AGENT_NAME)
             actor.update(learner.q_net)
-        actor.update_epsilon()
-        if ep % 10 == 0:
+            save_confs(train_step)
+        actor.update_epsilon(train_step)
+        if t % 10 == 0:
             for i, (loss, e1, e2, e3, e4) in enumerate(replay_buffer.episode_mem.values()):
                 print(f"{i}-len(e): {len(e1)}, loss: {loss}")
-            mean_reward = 0
-            for _ in range(test_num):
-                mean_reward = mean_reward + actor.act(test=True) / test_num
+            mean_reward = actor.evaluate()
             rewards_list.append(mean_reward)
+            print(f"reward list length: {len(rewards_list)}")
             print(f"mean_reward: {mean_reward}")
             # print("plotting")
             # plt.plot(rewards_list)
             # plt.draw()
+        train_step += train_batch_size
+        t += 1
     plt.plot(rewards_list)
     plt.show()
 

@@ -14,10 +14,10 @@ class LSTMBasedNet(tf.keras.Model):
     CONV_1_UNITS = 32
     CONV_2_UNITS = 64
     CONV_3_UNITS = 64
-    CONV_4_UNITS = 64
+    # CONV_4_UNITS = 64
     CONV_5_UNITS = 64
-    DENSE_1_UNITS = 128
-    DENSE_2_UNITS = 128
+    # DENSE_1_UNITS = 128
+    # DENSE_2_UNITS = 128
     DENSE_3_UNITS = 64
 
     def __init__(self, state_size: List, action_space_size, batch_size=1, use_lstm_states=True):
@@ -38,10 +38,10 @@ class LSTMBasedNet(tf.keras.Model):
                                             kernel_regularizer=kr,
                                             name="conv3")
 
-        self.conv4 = tf.keras.layers.Conv3D(filters=self.CONV_4_UNITS, kernel_size=[1, 4, 4],
-                                            strides=(1, 2, 2), activation=activation,
-                                            kernel_regularizer=kr,
-                                            name="conv4")
+        # self.conv4 = tf.keras.layers.Conv3D(filters=self.CONV_4_UNITS, kernel_size=[1, 4, 4],
+        #                                     strides=(1, 2, 2), activation=activation,
+        #                                     kernel_regularizer=kr,
+        #                                     name="conv4")
         self.conv5 = tf.keras.layers.Conv3D(filters=self.CONV_5_UNITS, kernel_size=[1, 3, 3],
                                             strides=(1, 1, 1), activation=activation,
                                             kernel_regularizer=kr,
@@ -51,17 +51,17 @@ class LSTMBasedNet(tf.keras.Model):
         #                                        kernel_regularizer='l2',
         #                                        name="conv3")
         self.max_pooling = tf.keras.layers.MaxPool3D(pool_size=(1, 2, 2))
-        self.dense1 = tf.keras.layers.Conv1D(filters=self.DENSE_1_UNITS, kernel_size=1,
-                                             activation=activation,
-                                             kernel_regularizer=kr,
-                                             name="dense1")
+        # self.dense1 = tf.keras.layers.Conv1D(filters=self.DENSE_1_UNITS, kernel_size=1,
+        #                                      activation=activation,
+        #                                      kernel_regularizer=kr,
+        #                                      name="dense1")
         self.lstm1 = tf.keras.layers.LSTM(self.LSTM_1_UNITS, activation=activation,
                                           return_sequences=True,
                                           return_state=True, name="first_LSTM")
         self.lstm2 = tf.keras.layers.LSTM(self.LSTM_2_UNITS, activation="tanh", return_sequences=True,
                                           return_state=True, name="second_LSTM")
-        self.dense2 = tf.keras.layers.Conv1D(filters=self.DENSE_2_UNITS, kernel_size=1,
-                                             activation=activation, name="dense2")
+        # self.dense2 = tf.keras.layers.Conv1D(filters=self.DENSE_2_UNITS, kernel_size=1,
+        #                                      activation=activation, name="dense2")
         self.dense3 = tf.keras.layers.Conv1D(filters=self.DENSE_3_UNITS, kernel_size=1,
                                              activation=activation, name="dense3")
         self.v = tf.keras.layers.Conv1D(filters=1, kernel_size=1, activation=None,

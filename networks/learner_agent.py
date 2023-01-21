@@ -52,7 +52,7 @@ class LearnerAgent:
     def update_target(self):
         self.target_net.set_weights(self.q_net.get_weights())
 
-    def train(self, epochs):
+    def train(self, epochs, batch_size=16):
 
         self.trainstep += 1
         if self.trainstep % self.replace == 0:
@@ -60,7 +60,7 @@ class LearnerAgent:
             print(f"replacing: {self.replaced_times}")
             self.update_target()
         batch = []
-        for batch_act, batch_train, episode_key in self.replay_buffer.sample_exp():
+        for batch_act, batch_train, episode_key in self.replay_buffer.sample_exp(batch_size=batch_size):
 
             start = time.time()
             # first run the RNN to update the state of the net (without training the weights)
@@ -254,6 +254,7 @@ class LearnerAgent:
         self.q_net.optimizer.set_weights(weight_values)
 
         self.q_net.load_weights(f'{name}_weights.h5')
+        self.target_net.set_weights(self.q_net.get_weights())
         # weights = np.load(name + ".npy", allow_pickle=True)
         # self.q_net.set_weights(weights)
         # self.target_net.set_weights(weights)

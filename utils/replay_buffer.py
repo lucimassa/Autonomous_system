@@ -48,7 +48,7 @@ class ReplayBuffer:
                                               np.array(done))
             self.pointer = (self.pointer + 1) % self.buffer_size
 
-    def sample_exp(self):
+    def sample_exp(self, batch_size):
         loss_key_list = [(self.episode_mem[key][0], key) for key in list(self.episode_mem.keys())]
         if len(loss_key_list) == 0:
             return []
@@ -56,7 +56,7 @@ class ReplayBuffer:
         probabilities = np.array(loss_list) / np.sum(loss_list)
         probabilities[-1] = 1 - np.sum(probabilities[:-1])
         # assert np.sum(probabilities) == 1
-        key = np.random.choice(key_list, p=probabilities, size=min(len(key_list), self.batch_size), replace=False)
+        key = np.random.choice(key_list, p=probabilities, size=min(len(key_list), batch_size), replace=False)
         # episode_num = 0
         out = []
         for k in key:

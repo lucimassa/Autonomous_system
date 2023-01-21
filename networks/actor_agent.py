@@ -2,12 +2,14 @@ import copy
 import numpy as np
 import random
 import tensorflow as tf
+import pickle
 
 from utils.replay_buffer import ReplayBuffer
 from networks.lstm_based_dddql import LSTMBasedNet
 
 from utils.preprocessing import get_state_size
 from utils.const import IMG_STACK_COUNT, OPTIMIZER, MAX_ACT_ITERATIONS, EPSILON_DECAY, EPS_1_PROB, RAND_EPS_PROB
+from utils.const import TRAIN_STEPS_BEFORE_MIN_EPS
 
 
 class ActorAgent:
@@ -25,6 +27,12 @@ class ActorAgent:
         self.epsilon_min = 0.05
         self.epsilon_decay = EPSILON_DECAY
         self.is_initialized = False
+
+        self.evaluate_test_num = 5
+        self.results = []
+        self.epsilon_fun = tf.keras.optimizers.schedules.PolynomialDecay(initial_learning_rate=1.0,
+                                                                         decay_steps=TRAIN_STEPS_BEFORE_MIN_EPS,
+                                                                         end_learning_rate=0.05)
 
     def _build_model(self):
         # Neural Net for Deep-Q learning Model
@@ -73,6 +81,7 @@ class ActorAgent:
         self.agent.reset_lstm_states()
         saved_something = False
         total_reward = 0
+        saved_chunks = 0
         debug_first_time = True
         time_step = 0
         debug_actions_made = []
@@ -83,6 +92,8 @@ class ActorAgent:
             if is_not_rand:
                 debug_actions_made.append(action)
             state, reward, done, _, _ = self.env.step(action)
+            if reward > 0:
+                reward = 1
             if reward != 0:
                 time_step = 0
                 print(f"reward: {reward}")
@@ -111,17 +122,19 @@ class ActorAgent:
                     reward_list = reward_list[middle:]
                     done_list = done_list[middle:]
                     saved_something = True
+                    saved_chunks += 1
 
             episode_reward += reward
             time_step += 1
         print(f"action_list: {debug_actions_made}")
-        return total_reward
+        return total_reward, saved_chunks
 
     def update(self, trained_agent: LSTMBasedNet):
         self.agent.set_weights(trained_agent.get_weights())
 
-    def update_epsilon(self):
-        self.epsilon = self.epsilon * self.epsilon_decay if self.epsilon > self.epsilon_min else self.epsilon_min
+    def update_epsilon(self, train_step):
+        # self.epsilon = self.epsilon * self.epsilon_decay if self.epsilon > self.epsilon_min else self.epsilon_min
+        self.epsilon = self.epsilon_fun(train_step)
         return self.epsilon
 
     def normalize_state(self, state):
@@ -137,6 +150,28 @@ class ActorAgent:
 
     def stack_states(self, states):
         return np.concatenate(states.copy(), axis=-1)
+
+    def evaluate(self):
+        mean_reward = 0
+        for _ in range(self.evaluate_test_num):
+            score, _ = self.act(test=True)
+            mean_reward = mean_reward + score / self.evaluate_test_num
+        self.results.append(mean_reward)
+        return mean_reward
+
+    def save_scores(self, name):
+        ActorAgent._save_scores(self.results, name)
+
+    @staticmethod
+    def _save_scores(scores, name):
+        with open(f"{name}_scores.pkl", 'wb') as results_file:
+            pickle.dump(scores, results_file)
+
+    @staticmethod
+    def load_results(name):
+        with open(f"{name}_scores.pkl", 'rb') as results_file:
+            return pickle.load(results_file)
+
 
 
 
