@@ -20,25 +20,11 @@ class ReplayBuffer:
         self.priority_exponent = 0.9
         self.img_stack_count = IMG_STACK_COUNT
 
-    # def init_episode(self, episode_num: int):
-    #     state_mem = np.zeros((self.buffer_size, *(self.observation_space.shape)), dtype=np.float32)
-    #     action_mem = np.zeros((self.buffer_size), dtype=np.int32)
-    #     reward_mem = np.zeros((self.buffer_size), dtype=np.float32)
-    #     next_state_mem = np.zeros((self.buffer_size, *(self.observation_space.shape)), dtype=np.float32)
-    #     done_mem = np.zeros((self.buffer_size), dtype=np.bool)
-    #     pointer = 0
-    #     self.episode_mem[episode_num] = (state_mem, action_mem, reward_mem, next_state_mem, done_mem, pointer)
-
-    # def init_episode(self, episode_num: int):
-    #     state_mem = []
-    #     action_mem = []
-    #     reward_mem = []
-    #     next_state_mem = []
-    #     done_mem = []
-    #     pointer = 0
-    #     self.episode_mem[episode_num] = (state_mem, action_mem, reward_mem, next_state_mem, done_mem, pointer)
-
     def add_exp(self, state: List, action: List, reward: List, done: List):
+        """
+        add experience to the replay buffer. state list nust be longer than other lists by 1,
+            in order to shift it and generate nxt stat list
+        """
         # given self.act_batch_len as the size of act batch, the train batch must be at least of size n_step
         if len(action) > self.n_step:
             self.episode_mem[self.pointer] = (1,
@@ -49,6 +35,10 @@ class ReplayBuffer:
             self.pointer = (self.pointer + 1) % self.buffer_size
 
     def sample_exp(self, batch_size):
+        """
+
+        :return: tuple (state, action, reward, next state, don)
+        """
         loss_key_list = [(self.episode_mem[key][0], key) for key in list(self.episode_mem.keys())]
         if len(loss_key_list) == 0:
             return []
@@ -79,7 +69,9 @@ class ReplayBuffer:
         return out
 
     def n_step_fix(self, states, actions, rewards, next_states, dones):
-
+        """
+        shifts next states and done in order to use them more easily with n-step dddqn
+        """
         n_step_states = states
         n_step_actions = actions
         n_step_rewards = rewards
@@ -91,6 +83,9 @@ class ReplayBuffer:
         return n_step_states, n_step_actions, n_step_rewards, n_step_next_states, n_step_dones
 
     def update_loss(self, episode_key, predicted, expected):
+        """
+        update the priority of the experience with key episode_key
+        """
         _, state, action, reward, done = self.episode_mem[episode_key]
         self.episode_mem[episode_key] = self.__calculate_loss(predicted, expected), state, action, reward, done
 
@@ -106,6 +101,9 @@ class ReplayBuffer:
         return len(self.episode_mem)
 
     def compress_state(self, state):
+        """
+        transform state in non normalized form (int) to occupy less space in memory
+        """
         min = 0
         max = 255
         range = max - min

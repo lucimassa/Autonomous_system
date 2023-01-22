@@ -17,23 +17,6 @@ from utils.const import ACT_SEQ_SIZE, BATCH_SIZE, GAME_NAME, MIN_BUFFER_SIZE, SA
 from utils.file_manager import save_learner, load_learner, restore_results, load_confs, save_confs
 
 
-# game_name = "CartPole-v1"
-
-
-def lstm_tutorial():
-    from tensorflow.python.keras import Sequential
-    anction_space_dim = 50
-    model = Sequential()
-    model.add(InputLayer(input_shape=(1, anction_space_dim), batch_size=1))
-    model.add(LSTM(128, input_shape=(32, anction_space_dim), stateful=True))
-    model.add(Dense(1))
-    model.compile(loss='mse', optimizer='sgd')
-
-    data = np.random.random((1, 1, anction_space_dim)).astype(np.float32)
-    pred = model.predict(data)
-    print(pred)
-
-
 def train_actor_learner_agents():
     starting_epsilon = 1
     env = gym.make(GAME_NAME)
@@ -56,7 +39,6 @@ def train_actor_learner_agents():
     except IOError:
         learner = LearnerAgent(state_size, action_size, N_STEP, ACT_SEQ_SIZE, replay_buffer)
         print("unable to load weights")
-    print(learner.q_net.get_weights())
 
     has_trained_once = False
     # for prep_ep in range(batch_size):
@@ -64,6 +46,7 @@ def train_actor_learner_agents():
     act_num = 0
     try:
         rewards_list = restore_results()
+
         actor.results = rewards_list
         print(f"reward_list: {len(rewards_list)}")
     except:
@@ -94,19 +77,13 @@ def train_actor_learner_agents():
             save_confs(train_step)
         actor.update_epsilon(train_step)
         if t % 10 == 0:
-            for i, (loss, e1, e2, e3, e4) in enumerate(replay_buffer.episode_mem.values()):
-                print(f"{i}-len(e): {len(e1)}, loss: {loss}")
+            # for i, (loss, e1, e2, e3, e4) in enumerate(replay_buffer.episode_mem.values()):
+            #     print(f"{i}-len(e): {len(e1)}, loss: {loss}")
+            print("evaluating the network...")
             mean_reward = actor.evaluate()
-            rewards_list.append(mean_reward)
-            print(f"reward list length: {len(rewards_list)}")
             print(f"mean_reward: {mean_reward}")
-            # print("plotting")
-            # plt.plot(rewards_list)
-            # plt.draw()
         train_step += train_batch_size
         t += 1
-    plt.plot(rewards_list)
-    plt.show()
 
 
 def test_actor_learner_agents():

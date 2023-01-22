@@ -35,14 +35,10 @@ class LearnerAgent:
         self.replaced_times = 0
 
     def _build_model(self, action_size):
-        # Neural Net for Deep-Q learning Model
         self.q_net = LSTMBasedNet(state_size=self.state_size, action_space_size=action_size)
         self.target_net = LSTMBasedNet(state_size=self.state_size, action_space_size=action_size)
-        # opt = tf.keras.optimizers.SGD(learning_rate=self.learning_rate, momentum=self.momentum)
         opt = OPTIMIZER
         loss_func = tf.keras.losses.mse
-        # loss_func = tf.keras.losses.Huber(delta=5)
-        # note: try using Huber loss instad
         self.q_net.compile(loss=loss_func, optimizer=opt, run_eagerly=True)
         self.target_net.compile(loss=loss_func, optimizer=opt, run_eagerly=True)
         self.q_net.predict(tf.zeros([1, 1] + self.state_size), verbose=0)
@@ -57,7 +53,7 @@ class LearnerAgent:
         self.trainstep += 1
         if self.trainstep % self.replace == 0:
             self.replaced_times += 1
-            print(f"replacing: {self.replaced_times}")
+            # print(f"replacing: {self.replaced_times}")
             self.update_target()
         batch = []
         for batch_act, batch_train, episode_key in self.replay_buffer.sample_exp(batch_size=batch_size):
@@ -65,9 +61,9 @@ class LearnerAgent:
             start = time.time()
             # first run the RNN to update the state of the net (without training the weights)
             self.reset_net_states()
-            print(f"episode_key: {episode_key}")
+            # print(f"episode_key: {episode_key}")
             if batch_train is None:
-                print("Not enouth data to train.")
+                # print("Not enouth data to train.")
                 return
 
             q_net_lstm_states_next = self.q_net.get_lstm_states()
@@ -98,14 +94,11 @@ class LearnerAgent:
                 n_step_dones = n_step_dones[:-(self.n_step - 1)]
 
             if len(n_step_states) == 0:
-                print("sequnce too short")
+                # print("sequnce too short")
                 continue
-
 
             n_step_states = tf.expand_dims(n_step_states, axis=0)             # add batch size as 1
             n_step_next_states = tf.expand_dims(n_step_next_states, axis=0)
-
-
 
             target = self.predict_q_net(n_step_states)
             next_state_val = self.predict_target_net(n_step_next_states)
@@ -134,30 +127,13 @@ class LearnerAgent:
                 value_prev, adv_prev = self.get_val_adv(n_step_states)
                 print(f"value: {value_prev}")
                 print(f"adv: {adv_prev}")
-                # for i in range(30):
-                #     print(f"loss: {self.fit_q_net(n_step_states, q_target)}")
-
-                # # x1, x2, x3, x4, x5, x6, w2, w3, w4, w5, v, a = self.q_net.debug_func(n_step_states)
-                # pred = self.predict_q_net(n_step_states)
-                # self.replay_buffer.update_loss(episode_key, pred, q_target)
-                # value_after, adv_after = self.get_val_adv(n_step_states)
-                # print(f"value: {value_prev} to {value_after}")
-                # print(f"adv: {adv_prev} to {adv_after}")
-                # predicted = self.predict_q_net(n_step_states)
-                # print(f"expected: {q_target}")
-                # print(f"predicted_after: {predicted}")
-                # loss = tf.keras.metrics.mean_squared_error(q_target, predicted)
-                # print(f"expected_loss = {np.mean(loss), np.sum(loss)}")
-
 
             batch.append((self.q_net.get_lstm_states(), n_step_states, q_target, episode_key))
 
             loss = None
-            # loss = self.fit_q_net(n_step_states, q_target, epochs=1)
-            # self.replay_buffer.update_loss(episode_key, loss[0])
         start = time.time()
         self.fit_q_net_batch(batch, epochs)
-        print(f"fit_time: {time.time() - start}")
+        # print(f"fit_time: {time.time() - start}")
 
     # def h(self, x: np.ndarray):
     #     return np.sign(x) * (np.sqrt(np.absolute(x) + 1) - 1) + self.epsilon * x
@@ -177,17 +153,9 @@ class LearnerAgent:
         return n_step_reward
 
     def fit_q_net_batch(self, batch, epochs):
-        # X = []
-        # Y = []
-        # keys = []
-        # for ep in range(epochs):
-        #     for lstm_states, n_step_states, q_target, episode_key in batch:
-        #         self.q_net.set_lstm_states(lstm_states)
-        #         X.append((n_step_states[0], lstm_states))
-        #         Y.append(q_target)
-        #         keys.append(episode_key)
-        # losses = self.q_net.fit(X, Y, epochs=1, verbose=0)
-        # print(losses.shape)
+        """
+        in practice just train all elements of the batch in sequence
+        """
         for ep in range(epochs):
             losses = []
             for lstm_states, n_step_states, q_target, episode_key in batch:
@@ -203,6 +171,9 @@ class LearnerAgent:
             print(f"loss: {np.mean(losses)}")
 
     def fit_q_net(self, n_step_states, q_target, epochs=1, change_rnn_states=False):
+        """
+        fit q_net and restores the states that the LSTM had before fitting, if change_rnn_states is false
+        """
         history = None
         loss = None
         for ep in range(epochs):
@@ -215,6 +186,9 @@ class LearnerAgent:
         return loss
 
     def predict_q_net(self, states, lstm_states=None):
+        """
+        predict q_net and restores the states that the LSTM had before fitting, if change_rnn_states is false
+        """
         return self._predict(self.q_net, states, lstm_states)
 
     def get_val_adv(self, states):
@@ -224,9 +198,15 @@ class LearnerAgent:
         return value_prev, adv_prev
 
     def predict_target_net(self, states, lstm_states=None):
+        """
+        predict target_net and restores the states that the LSTM had before fitting, if change_rnn_states is false
+        """
         return self._predict(self.target_net, states, lstm_states)
 
     def _predict(self, network: LSTMBasedNet, states, lstm_states):
+        """
+        predict "network" and restores the states that the LSTM had before fitting, if change_rnn_states is false
+        """
         q_net_states = network.get_lstm_states()
         if lstm_states is not None:
             network.set_lstm_states(lstm_states)
@@ -236,14 +216,18 @@ class LearnerAgent:
         return out
 
     def save(self, name):
+        """
+        saves to file the weights and information needed to restore the training (optimizer's variables)
+        """
         self.q_net.save_weights(f'{name}_weights.h5')
         weight_values = self.q_net.optimizer.get_weights()
         with open(f'{name}_optimizer.pkl', 'wb') as f:
             pickle.dump(weight_values, f)
-        # weights = np.array(self.q_net.get_weights(), dtype="object")
-        # np.save(name + ".npy", weights, allow_pickle=True)
 
     def load(self, name: str):
+        """
+        load all what is needed to restore the training
+        """
         self.q_net.make_train_function()
         with open(f'{name}_optimizer.pkl', 'rb') as f:
             weight_values = pickle.load(f)
@@ -255,9 +239,6 @@ class LearnerAgent:
 
         self.q_net.load_weights(f'{name}_weights.h5')
         self.target_net.set_weights(self.q_net.get_weights())
-        # weights = np.load(name + ".npy", allow_pickle=True)
-        # self.q_net.set_weights(weights)
-        # self.target_net.set_weights(weights)
 
     def reset_net_states(self):
         self.q_net.reset_lstm_states()

@@ -1,7 +1,5 @@
 import gym
-from networks.ddql import test_ddql
-from networks.dddql import test_dddql
-from networks.LSTM import *
+from networks.LSTM_trainer_tester import *
 import tensorflow as tf
 import time
 
@@ -32,25 +30,15 @@ def test_tensorflow_GPU():
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    # tf.debugging.set_log_device_placement(True)
     # test_environment()
     start = time.time()
     gpus = tf.config.list_logical_devices('GPU')
-    # with tf.device(gpus[0].name):
-    #     test_ddql()
-    # with tf.devicevvvv (gpus[0].name):
-    #     test_dddql()
     with tf.device(gpus[0].name):
     # with tf.device("/cpu:0"):
 
         # test_gym()x
         train_actor_learner_agents()
-        # test_actor_learner_agents()
-        # test_lstm()
-        # lstm_tutorial()
     print(f"time usd: {time.time() - start}")
-    # test_ddql()
-    # test_tensorflow_GPU()
 
 
 

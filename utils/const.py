@@ -1,7 +1,9 @@
 import tensorflow as tf
+import os
 
-SAVE_AGENT_NAME = "agent_117"
 
+AGENT_NAME = "agent_117"
+SAVE_AGENT_NAME = os.path.join("checkpoints", AGENT_NAME)
 N_STEP = 5
 TOTAL_TRAIN_STEPS = 3000 * 16
 TRAIN_STEPS_BEFORE_MIN_EPS = 2000 * 16

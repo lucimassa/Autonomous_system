@@ -35,13 +35,11 @@ class ActorAgent:
                                                                          end_learning_rate=0.05)
 
     def _build_model(self):
-        # Neural Net for Deep-Q learning Model
         self.agent = LSTMBasedNet(state_size=self.state_size, action_space_size=self.action_size, batch_size=1)
         opt = OPTIMIZER
 
         # should not be needed to specify the loss function,
         #   as this net will never train but just copy another trained network
-        # loss_func = tf.keras.losses.Huber()
         loss_func = tf.keras.losses.mse
         self.agent.compile(loss=loss_func, optimizer=opt, run_eagerly=True)
         self.agent.predict(tf.zeros([1, 1] + self.state_size), verbose=0)
@@ -49,26 +47,25 @@ class ActorAgent:
     def _act(self, state, epsilon, test=False):
         if np.random.rand() <= epsilon and not test:
             return random.randrange(self.action_size), False
-        # state = tf.expand_dims(state, axis=0)
         act_values = self.agent.advantage(np.array([state]))
-        # print(np.argmax(act_values))
         return np.argmax(act_values), True  # returns action
 
     def act(self, test=False, render=False):
         choice = np.random.rand()
+
+        # in final version, only the else case should be called
         if choice < EPS_1_PROB:
             episode_epsilon = 1
-            print("completely random episode")
+            # print("completely random episode")
         elif choice < EPS_1_PROB + RAND_EPS_PROB:
             episode_epsilon = random.uniform(self.epsilon, 1)
-            print(f"random epilon: {episode_epsilon}")
+            # print(f"random epilon: {episode_epsilon}")
         else:
             episode_epsilon = self.epsilon
-            print(f"real epsilon: {episode_epsilon}")
+            # print(f"real epsilon: {episode_epsilon}")
         state_list = []
         action_list = []
         reward_list = []
-        next_state_list = []
         done_list = []
         done = False
         state, _ = self.env.reset()
@@ -77,12 +74,9 @@ class ActorAgent:
         state_queue = [state] * IMG_STACK_COUNT
         state_list.append(state)
         episode_reward = 0
-        # self.agent.predict(np.array([state]))
         self.agent.reset_lstm_states()
-        saved_something = False
         total_reward = 0
         saved_chunks = 0
-        debug_first_time = True
         time_step = 0
         debug_actions_made = []
         while not done and time_step < MAX_ACT_ITERATIONS:
@@ -96,7 +90,7 @@ class ActorAgent:
                 reward = 1
             if reward != 0:
                 time_step = 0
-                print(f"reward: {reward}")
+                # print(f"reward: {reward}")
             state = self.normalize_state(state).astype('float16')
             # print(f"reward: {reward}")
             state_queue = self.add_to_queue(state_queue, state)
@@ -109,13 +103,14 @@ class ActorAgent:
             action_list.append(action)
             reward_list.append(reward)
             done_list.append(done)
-            # sk_next_state = np.reshape(sk_next_state, [1] + list(sk_next_state.shape))
 
             mem_len = len(action_list)
 
             if self.replay_buffer is not None and not test:
                 if done or time_step == round(self.seq_len / 2 - 1) or mem_len >= self.seq_len:
                     self.replay_buffer.add_exp(state_list, action_list, reward_list, done_list)
+                    # keep only half of the experience in order to create a shifting windows of size self.seq_len,
+                    #   which shifts by self.seq_len / 2
                     middle = round(mem_len / 2)
                     state_list = state_list[middle:]
                     action_list = action_list[middle:]
@@ -126,13 +121,19 @@ class ActorAgent:
 
             episode_reward += reward
             time_step += 1
-        print(f"action_list: {debug_actions_made}")
+        # print(f"action_list: {debug_actions_made}")
         return total_reward, saved_chunks
 
     def update(self, trained_agent: LSTMBasedNet):
+        """
+        update th wight of the network to the network that is being traind
+        """
         self.agent.set_weights(trained_agent.get_weights())
 
     def update_epsilon(self, train_step):
+        """
+        update epsilon greedy's epsilon
+        """
         # self.epsilon = self.epsilon * self.epsilon_decay if self.epsilon > self.epsilon_min else self.epsilon_min
         self.epsilon = self.epsilon_fun(train_step)
         return self.epsilon
@@ -152,6 +153,9 @@ class ActorAgent:
         return np.concatenate(states.copy(), axis=-1)
 
     def evaluate(self):
+        """
+        make an evaluation of the ntwork by making the network playing the game few times and averaging the results
+        """
         mean_reward = 0
         for _ in range(self.evaluate_test_num):
             score, _ = self.act(test=True)
@@ -160,6 +164,9 @@ class ActorAgent:
         return mean_reward
 
     def save_scores(self, name):
+        """
+        save scores to file
+        """
         ActorAgent._save_scores(self.results, name)
 
     @staticmethod

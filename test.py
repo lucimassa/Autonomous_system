@@ -1,5 +1,5 @@
 
-from networks.LSTM import *
+from networks.LSTM_trainer_tester import *
 import tensorflow as tf
 import time
 

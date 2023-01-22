@@ -78,27 +78,14 @@ class LSTMBasedNet(tf.keras.Model):
         self.state_1 = None
         self.state_2 = None
         self.reset_lstm_states()
-        # self.d1_old = tf.keras.layers.Dense(128, activation='relu')
-        # self.d2_old = tf.keras.layers.Dense(128, activation='relu')
-        # self.v_old = tf.keras.layers.Dense(1, activation=None)
-        # self.a_old = tf.keras.layers.Dense(action_space_size, activation=None)
 
     def call(self, obs_and_states, training=None, mask=None):
         obs, lstm_states = self.unpack_input(obs_and_states)
         x = self.core_net(obs, lstm_states)
         v = self.v(x)
         a = self.a(x)
-        # print(f"in call v: {v}; a:{a};\n adv_mean:{tf.math.reduce_mean(a, axis=-1, keepdims=True)}")
         Q = v + (a - tf.math.reduce_mean(a, axis=-1, keepdims=True))
         return Q
-
-    # def call(self, inputs, training=None, mask=None):
-    #     x = self.d1_old(inputs)
-    #     x = self.d2_old(x)
-    #     v = self.v_old(x)
-    #     a = self.a_old(x)
-    #     Q = v + (a - tf.math.reduce_mean(a, axis=1, keepdims=True))
-    #     return Q
 
     def advantage(self, obs_and_states):
         obs, lstm_states = self.unpack_input(obs_and_states)
@@ -130,9 +117,6 @@ class LSTMBasedNet(tf.keras.Model):
         x = obs
 
         x = self.conv1(x)
-        # print(f"shape_obs: {obs.shape}")
-        # print(f"shape_conv1: {x.shape}")
-        # x = tf.keras.layers.Dropout(0.2)(x)
         x = self.conv2(x)
         x = self.conv3(x)
         # x = self.conv4(x)
@@ -143,24 +127,16 @@ class LSTMBasedNet(tf.keras.Model):
         # x = self.dense1(x)
         x, state_h_1, state_c_1 = self.lstm1(x, initial_state=self.state_1)
         # x, state_h_2, state_c_2 = self.lstm2(x, initial_state=self.state_2)
-        # x = tf.keras.layers.Dropout(0.2)(x)
         # x = self.dense2(x)
         x = self.dense3(x)
         self.state_1 = [state_h_1, state_c_1]
         # self.state_2 = [state_h_2, state_c_2]
         return x
 
-    # def advantage(self, state):
-    #     x = self.d1_old(state)
-    #     x = self.d2_old(x)
-    #     a = self.a_old(x)
-    #     return a
-
     def reset_lstm_states(self):
         self.state_1 = [tf.zeros((self.batch_size, self.LSTM_1_UNITS)), tf.zeros((self.batch_size, self.LSTM_1_UNITS))]
         self.state_2 = [tf.zeros((self.batch_size, self.LSTM_2_UNITS)), tf.zeros((self.batch_size, self.LSTM_2_UNITS))]
-        self.state_v = [tf.zeros((self.batch_size, 1)), tf.zeros((self.batch_size, 1))]
-        self.state_a = [tf.zeros((self.batch_size, self.action_space_size)), tf.zeros((self.batch_size, self.action_space_size))]
+
     def get_lstm_states(self):
         return self.state_1, self.state_2
 
